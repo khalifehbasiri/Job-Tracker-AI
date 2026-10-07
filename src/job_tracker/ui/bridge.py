@@ -15,6 +15,12 @@ from job_tracker.db import Account, Usage
 from job_tracker.email import connect_gmail, connect_outlook
 from job_tracker.errors import describe_error
 from job_tracker.excel import export_search, import_rows, preview_import
+from job_tracker.oauth import (
+    MICROSOFT_CLIENT_ID,
+    PRIVACY_URL,
+    bundled_google_client,
+    google_desktop_client,
+)
 from job_tracker.services import Tracker
 from job_tracker.worker import BudgetReached, Importer
 
@@ -53,6 +59,7 @@ class Bridge(QObject):
         self.pool.setMaxThreadCount(1)
         self._busy = False
         self._operation = ""
+        self._mailbox_messages = {}
         self._message = "Your records stay on this computer. AI is optional."
         self._search_id = int(tracker.get_setting("selected_search", "0"))
         self._events, self._import_preview, self._scan_plan = [], {}, {}
@@ -124,6 +131,37 @@ class Bridge(QObject):
     )
     trayAvailable = Property(bool, lambda self: self._tray, notify=changed)
     dataPath = Property(str, lambda self: str(self.tracker.db.path), constant=True)
+    privacyUrl = Property(str, lambda self: PRIVACY_URL, constant=True)
+    googleConfigured = Property(
+        bool,
+        lambda self: bool(self.vault.get("google-oauth-client") or bundled_google_client()),
+        notify=changed,
+    )
+    microsoftClient = Property(
+        str,
+        lambda self: self.tracker.get_setting("microsoft_client_id", MICROSOFT_CLIENT_ID),
+        notify=changed,
+    )
+    connectingProvider = Property(
+        str,
+        lambda self: (
+            self._operation.removeprefix("oauth:") if self._operation.startswith("oauth:") else ""
+        ),
+        notify=changed,
+    )
+    mailboxStatuses = Property(
+        "QVariantMap",
+        lambda self: {provider: self.mailboxStatus(provider) for provider in ("gmail", "outlook")},
+        notify=changed,
+    )
+
+    @Slot(str, result=str)
+    def mailboxStatus(self, provider):
+        if provider in self._mailbox_messages:
+            return self._mailbox_messages[provider]
+        connected = sum(row["provider"] == provider and row["connected"] for row in self._accounts)
+        name = "Gmail" if provider == "gmail" else "Outlook"
+        return f"{name}: {connected} connected." if connected else f"{name}: no connected mailbox."
 
     def feedback(self, text):
         self._message = text
@@ -143,7 +181,7 @@ class Bridge(QObject):
         except Exception:
             self.feedback("Could not save the change. Your existing records are preserved.")
 
-    def background(self, action, complete=lambda _result: None, operation=""):
+    def background(self, action, complete=lambda _result: None, operation="", on_failure=None):
         if self._busy:
             self.feedback("Wait for the current operation, or pause the scan first.")
             return
@@ -167,6 +205,8 @@ class Bridge(QObject):
             self._busy = False
             self._operation = ""
             self.feedback(text)
+            if on_failure:
+                on_failure(text)
             self.refresh()
 
         work.signals.success.connect(finished)
@@ -311,25 +351,72 @@ class Bridge(QObject):
 
     @Slot(bool)
     def connectGmail(self, persist):
+        def connect():
+            saved = self.vault.get("google-oauth-client")
+            config = json.loads(saved) if saved else bundled_google_client()
+            if not config:
+                from job_tracker.errors import UserFacingError
+
+                raise UserFacingError(
+                    "Google sign-in is not configured in this build. Use Advanced OAuth setup."
+                )
+            return connect_gmail(self.tracker, self.vault, config, persist)
+
+        self.connectMailbox("gmail", connect)
+
+    @Slot(bool)
+    def chooseGmailClient(self, persist):
+        if self._busy:
+            return
         path, _ = QFileDialog.getOpenFileName(
             None, "Google Desktop OAuth client", "", "JSON (*.json)"
         )
         if path:
 
-            def connect():
-                config = json.loads(Path(path).read_text(encoding="utf-8"))
-                return connect_gmail(self.tracker, self.vault, config, persist)
+            def configure():
+                config = google_desktop_client(json.loads(Path(path).read_text(encoding="utf-8")))
+                self.vault.save("google-oauth-client", json.dumps(config), persist)
+                self.feedback("Google OAuth client configured. Click Connect Gmail to sign in.")
 
-            self.background(
-                connect, lambda address: self.feedback(f"Connected {address} read-only.")
-            )
+            self.local(configure)
 
     @Slot(str, bool)
     def connectOutlook(self, client_id, persist):
-        self.background(
+        self.connectMailbox(
+            "outlook",
             lambda: connect_outlook(self.tracker, self.vault, client_id.strip(), persist),
-            lambda address: self.feedback(f"Connected {address} read-only."),
         )
+
+    @Slot(str)
+    def saveMicrosoftClient(self, client_id):
+        def configure():
+            from uuid import UUID
+
+            value = str(UUID(client_id.strip()))
+            self.tracker.set_setting("microsoft_client_id", value)
+            self.feedback("Microsoft OAuth client configured. Click Connect Outlook to sign in.")
+
+        self.local(configure)
+
+    def connectMailbox(self, provider, action):
+        name = "Gmail" if provider == "gmail" else "Outlook"
+        if self._busy:
+            self._mailbox_messages[provider] = f"{name}: pause the scan or wait before connecting."
+            self.feedback(self._mailbox_messages[provider])
+            return
+        self._mailbox_messages[provider] = (
+            f"{name}: signing in. Finish in your browser, then return here."
+        )
+        self.feedback(self._mailbox_messages[provider])
+
+        def complete(address):
+            self._mailbox_messages[provider] = f"{name}: connected read-only."
+            self.feedback(f"Connected {address} read-only.")
+
+        def failed(text):
+            self._mailbox_messages[provider] = f"{name}: connection was not saved. {text}"
+
+        self.background(action, complete, operation=f"oauth:{provider}", on_failure=failed)
 
     @Slot(int)
     def disconnectAccount(self, account_id):
@@ -339,6 +426,7 @@ class Bridge(QObject):
                 if account and account.credential_ref:
                     self.vault.remove(account.credential_ref)
                     account.credential_ref = ""
+                    self._mailbox_messages.pop(account.provider, None)
 
         self.local(action)
 

@@ -1,15 +1,17 @@
-# Connecting a mailbox (developer release)
+# Connecting a mailbox
 
 The tracker uses read-only OAuth. You enter email credentials in your provider's browser sign-in page, never in this app. No mailbox requests occur until you connect an account. AI imports require a separate OpenAI key and explicit authorization in the app.
 
-This source release has no shared OAuth registration. Each developer supplies their own public installed-app registration. Turnkey public onboarding requires a maintained provider registration, privacy policy, and any required verification.
+Settings offers ordinary Connect Gmail / Connect Outlook buttons using maintained desktop registrations when supplied in the build. Read the disclosure, continue to your provider's browser, and return to the app. The mailbox appears only after sign-in and read access succeed. Provider-specific failures remain visible in Settings. Google public verification and Microsoft publisher verification are pending; see [public OAuth preparation](public-oauth.md).
+
+Advanced OAuth setup supports your own registrations for development or a fork. It is optional in builds with maintained clients.
 
 ## Gmail
 
 1. Create a Google Cloud project and enable the Gmail API.
 2. Configure the OAuth consent screen. During development, add your account as a test user.
 3. Create an OAuth client of type **Desktop app**, and download its client JSON outside the repository.
-4. In Settings, choose **Connect Gmail** and select that JSON file.
+4. In Settings, open **Advanced OAuth setup**, choose the Google Desktop JSON, then click **Connect Gmail**. The override is saved in your OS credential store (or memory for Session only).
 5. Complete consent in your system browser. The app requests only `gmail.readonly`.
 
 The loopback callback listens on `127.0.0.1` on a random port with PKCE. Tokens are stored in the OS credential store, or memory if you choose Session only. Testing-mode Google refresh tokens can expire; reconnect when prompted. Gmail read-only is a restricted scope; public release and sending Gmail-derived data to an AI provider require attention to Google's verification and user-data policies.
@@ -21,7 +23,7 @@ Sources: [installed-app OAuth](https://developers.google.com/identity/protocols/
 1. Register an application in Microsoft Entra that supports your intended account type (including personal Microsoft accounts when needed).
 2. Add a **Mobile and desktop application** platform with `http://localhost` as a redirect URI.
 3. Configure delegated Microsoft Graph permissions `Mail.Read` and `User.Read`. Do not create an application secret for this desktop client.
-4. Paste its **Application (client) ID** in Settings and choose **Connect Outlook**.
+4. In Settings → **Advanced OAuth setup**, paste its **Application (client) ID** and save. Then choose **Connect Outlook**. The maintained client ID is already configured unless you override it.
 5. Complete sign-in and consent in the system browser. Organization policies may require administrator consent.
 
 The token cache is kept in the OS credential store or memory. Mailbox IDs request Microsoft's immutable-ID format so moving an email does not create a second processing identity.

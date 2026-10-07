@@ -8,7 +8,7 @@ Desktop dashboard, search-scoped SQLite records, manual editing, Excel import/ex
 
 - Validate Gmail, Outlook, Decisions, and extraction end to end with consenting test accounts.
 - Calibrate classification thresholds and identity matching with redacted, labelled examples; measure missed job emails and incorrect matches.
-- Supply maintained OAuth registrations, provider verification where required, and a published privacy policy so users need not register developer apps.
+- Complete Google restricted-scope verification and security assessment, plus Microsoft publisher verification. Maintained desktop clients, build-secret configuration, normal sign-in buttons, and provider diagnostics are implemented; approval and a domain ownership-verifiable privacy site remain pending. See [public OAuth preparation](public-oauth.md).
 - Build and sign a Windows installer, include dependency licenses, and verify upgrades and uninstall behavior on a clean machine.
 - Add an explicit data retention/erase flow, connection diagnostics with safe error messages, and configurable model/pricing updates.
 - Improve editable task scheduling, assessment completion tracking, timezone display, and review corrections before acceptance.

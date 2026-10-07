@@ -11,14 +11,14 @@ A Windows-first, open-source desktop app that tracks job applications from your 
 - Separate named job searches, with optional dates, archiving, and application moves between searches.
 - Dashboard, company/role search, stage filtering, editable applications, notes, event timelines, and upcoming tasks.
 - Excel column-mapping preview and duplicate detection. Export each search to a workbook with Applications, Events, Tasks, and Search sheets. Import/export costs no API credits.
-- Read-only Gmail and Outlook adapters using browser-based OAuth.
+- Read-only Gmail and Outlook connections using browser-based OAuth, maintained desktop registrations when supplied, and advanced configuration for forks.
 - GPT-6 Luna Decisions classifies application confirmations, rejections, assessments, interviews, offers, and other updates; GPT-5.4 mini extracts facts and dates. Uncertain matches go to a review inbox.
-- Historical email scans for 1, 3, 6, or 12 months, plus custom dates. Preview volume and illustrative API costs, set a USD spending limit, then start. Pause and resume without repeating completed AI work.
+- Historical email scans for 1, 3, 6, or 12 months, plus custom dates. Process oldest first across connected mailboxes. Preview volume and illustrative API costs, set a USD spending limit, then start. Pause and resume without repeating completed AI work. Invalid AI extractions go to review without automatic paid retries.
 - Masked API-key settings, secure OS credential storage, and session-only credentials. No shared developer key.
 - Opt-in polling every five minutes with per-sync and daily AI spending limits. Closing to the tray keeps the worker running while your computer is awake.
 - Database backups and automatic schema migrations. Manual status corrections are protected from automatic updates.
 
-**This is an early source release, not a signed installer.** Provider connections require your own OAuth app registration; see [mailbox setup](docs/mailbox-setup.md). Automated tests use fake mailboxes and API responses. Real-account OAuth and AI integration have not yet been validated end to end.
+**This is an early source release, not a signed installer.** Google public verification and Microsoft publisher verification are pending. Maintained desktop clients are wired into builds; source checkouts without Google build configuration can use Advanced OAuth setup. See [mailbox setup](docs/mailbox-setup.md) and [public sign-in preparation](docs/public-oauth.md). Automated tests use fake mailboxes and API responses. Complete real-account validation and provider approval before a general end-user launch.
 
 ## Run on Windows
 

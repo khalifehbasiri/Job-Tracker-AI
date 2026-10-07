@@ -35,6 +35,10 @@ jobs:
       - run: uv run ruff check .
       - run: uv run ruff format --check .
       - run: uv run pytest -q
+      - name: Prepare maintained Google desktop OAuth client
+        env:
+          GOOGLE_DESKTOP_OAUTH_JSON: ${{ secrets.GOOGLE_DESKTOP_OAUTH_JSON }}
+        run: uv run python scripts/configure_google_oauth.py
       - run: uv build
       - run: uv run job-tracker --demo --database artifacts/ci-demo.sqlite3 --screenshot artifacts/dashboard.png
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4

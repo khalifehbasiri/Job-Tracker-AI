@@ -17,6 +17,7 @@ dist/
 *client_secret*.json
 credentials.json
 token.json
+src/job_tracker/google_desktop_oauth.json
 *.log
 .coverage
 htmlcov/

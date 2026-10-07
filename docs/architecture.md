@@ -12,7 +12,7 @@ Each application belongs to one named search. Searches have optional dates and a
 
 ## Email and AI
 
-Gmail and Outlook use read-only OAuth. Development users configure their own installed-app OAuth clients. A maintained, verified OAuth registration is a release prerequisite for turnkey public mailbox onboarding.
+Gmail and Outlook use read-only OAuth through maintained public desktop registrations. Google build metadata is generated from an ignored local file or an encrypted GitHub Actions secret. Forks can override registrations in Advanced OAuth setup. Account credentials remain separate in the OS keyring. Sign-in status is retained per provider, and Outlook profile/mailbox access is verified before account registration. Maintained clients are wired in, but provider approval remains a release prerequisite for general public onboarding; see [public OAuth preparation](public-oauth.md).
 
 Inbound emails are untrusted data, never instructions. The classifier has no tools or mail mutation privileges. Decisions classifies relevance and event type; a mini model extracts typed fields and evidence. Python validates results, matches application identity, and updates an append-only event history. Manual corrections are preserved. Silence is not rejection; an invitation is not completion.
 

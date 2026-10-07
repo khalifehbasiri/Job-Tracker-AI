@@ -255,12 +255,14 @@ ApplicationWindow {
                                     anchors.fill: parent
                                     PlainLabel { text: modelData.subject; font.bold: true; Layout.fillWidth: true; wrapMode: Text.WordWrap; textFormat: Text.PlainText }
                                     PlainLabel { text: modelData.reason; color: "#b08045" }
+                                    PlainLabel { visible: !!JSON.parse(modelData.proposed_json).extraction.company || !!JSON.parse(modelData.proposed_json).extraction.role; text: "Proposed: " + (JSON.parse(modelData.proposed_json).extraction.company || "Unknown company") + " / " + (JSON.parse(modelData.proposed_json).extraction.role || "Unknown role"); Layout.fillWidth: true; wrapMode: Text.WordWrap; color: "#61745e" }
                                     PlainLabel { text: modelData.sender; color: "#859280"; textFormat: Text.PlainText }
                                     PlainLabel { text: modelData.body.slice(0, 1200); Layout.fillWidth: true; wrapMode: Text.WordWrap; textFormat: Text.PlainText; color: "#61745e" }
                                     RowLayout {
                                         ComboBox { id: reviewApp; Layout.fillWidth: true; model: backend.applications.map(function(a) { return {id: a.id, name: a.company + " / " + a.role} }); textRole: "name"; valueRole: "id" }
                                         ActionButton { text: "Link application"; enabled: !backend.busy && reviewApp.currentIndex >= 0; onClicked: backend.resolveReview(modelData.id, reviewApp.currentValue, false) }
-                                        ActionButton { text: "Create application"; enabled: !backend.busy; onClicked: backend.resolveReview(modelData.id, 0, false) }
+                                        ActionButton { text: "Create application"; visible: !!JSON.parse(modelData.proposed_json).extraction.company && !!JSON.parse(modelData.proposed_json).extraction.role; enabled: !backend.busy; onClicked: backend.resolveReview(modelData.id, 0, false) }
+                                        ActionButton { text: "Add manually"; visible: !JSON.parse(modelData.proposed_json).extraction.company || !JSON.parse(modelData.proposed_json).extraction.role; enabled: !backend.busy; onClicked: root.openApplication(null) }
                                         ActionButton { text: "Ignore"; enabled: !backend.busy; onClicked: backend.resolveReview(modelData.id, 0, true) }
                                     }
                                 }
@@ -351,13 +353,17 @@ ApplicationWindow {
                             ColumnLayout {
                                 anchors.fill: parent; spacing: 12
                                 PlainLabel { text: "Connected mailboxes"; font.bold: true; font.pixelSize: 20; color: "#2b4434" }
-                                PlainLabel { text: "Read-only access. This app cannot send, delete, or mark emails as read.\nFor this developer release, use your own OAuth app registration (see docs/mailbox-setup.md)."; wrapMode: Text.WordWrap; color: "#7b8975"; Layout.fillWidth: true }
+                                PlainLabel { text: "Connect your account in your browser. Access is read-only.\nGoogle public verification and Microsoft publisher verification are pending."; wrapMode: Text.WordWrap; color: "#7b8975"; Layout.fillWidth: true }
                                 RowLayout {
-                                    ActionButton { text: "Connect Gmail…"; enabled: !backend.busy; onClicked: backend.connectGmail(!mailSession.checked) }
-                                    Field { id: microsoftClient; placeholderText: "Microsoft public client ID"; Layout.fillWidth: true }
-                                    ActionButton { text: "Connect Outlook"; enabled: !backend.busy && microsoftClient.text.length > 0; onClicked: backend.connectOutlook(microsoftClient.text, !mailSession.checked) }
+                                    ActionButton { text: backend.connectingProvider === "gmail" ? "Signing in to Gmail…" : "Connect Gmail"; enabled: !backend.busy && backend.googleConfigured; onClicked: { mailboxConsent.provider = "gmail"; mailboxConsent.open() } }
+                                    ActionButton { text: backend.connectingProvider === "outlook" ? "Signing in to Outlook…" : "Connect Outlook"; enabled: !backend.busy && backend.microsoftClient.length > 0; onClicked: { mailboxConsent.provider = "outlook"; mailboxConsent.open() } }
                                     CheckBox { id: mailSession; text: "Session only" }
+                                    Item { Layout.fillWidth: true }
+                                    ActionButton { text: "Advanced OAuth setup"; enabled: !backend.busy; onClicked: advancedOAuth.open() }
                                 }
+                                PlainLabel { text: backend.mailboxStatuses.gmail; wrapMode: Text.WordWrap; Layout.fillWidth: true; color: "#61765b" }
+                                PlainLabel { text: backend.mailboxStatuses.outlook; wrapMode: Text.WordWrap; Layout.fillWidth: true; color: "#61765b" }
+                                PlainLabel { visible: !backend.googleConfigured; text: "Google sign-in is not included in this build. Configure a desktop client in Advanced OAuth setup."; wrapMode: Text.WordWrap; Layout.fillWidth: true; color: "#965b38" }
                                 Repeater {
                                     model: backend.accounts
                                     delegate: RowLayout {
@@ -386,6 +392,38 @@ ApplicationWindow {
                     }
                 }
             }
+        }
+    }
+    Dialog {
+        id: mailboxConsent
+        property string provider: ""
+        title: provider === "gmail" ? "Connect Gmail" : "Connect Outlook"
+        modal: true; anchors.centerIn: parent; width: 560
+        standardButtons: Dialog.Ok | Dialog.Cancel
+        onAccepted: {
+            if (provider === "gmail") backend.connectGmail(!mailSession.checked)
+            else backend.connectOutlook(backend.microsoftClient, !mailSession.checked)
+        }
+        ColumnLayout {
+            width: parent.width; spacing: 14
+            PlainLabel { text: "Job Tracker AI reads email senders, subjects, dates, and message bodies to track your applications. It cannot send, delete, or mark emails as read. Saved email text and job records stay in a local database."; wrapMode: Text.WordWrap; Layout.fillWidth: true }
+            PlainLabel { text: "Connecting does not start AI processing. When you start a scan or enable automatic processing, selected email text is sent to OpenAI using your API key. This can include unrelated emails. No email data is sent to the app developer."; wrapMode: Text.WordWrap; Layout.fillWidth: true }
+            PlainLabel { text: "Continue to the provider's consent screen in your browser. Your account appears here only after sign-in and mailbox access succeed."; wrapMode: Text.WordWrap; Layout.fillWidth: true; color: "#61765b" }
+            ActionButton { text: "Read privacy policy"; onClicked: Qt.openUrlExternally(backend.privacyUrl) }
+        }
+    }
+    Dialog {
+        id: advancedOAuth
+        title: "Advanced OAuth setup"
+        modal: true; anchors.centerIn: parent; width: 620
+        standardButtons: Dialog.Close
+        ColumnLayout {
+            width: parent.width; spacing: 14
+            PlainLabel { text: "Use your own desktop registration for development or a fork. Normal sign-in uses the maintained registrations included in the app."; wrapMode: Text.WordWrap; Layout.fillWidth: true }
+            ActionButton { text: "Choose Google Desktop client JSON…"; enabled: !backend.busy; onClicked: backend.chooseGmailClient(!mailSession.checked) }
+            Field { id: microsoftClient; text: backend.microsoftClient; placeholderText: "Microsoft public client ID"; Layout.fillWidth: true }
+            ActionButton { text: "Save Microsoft client ID"; enabled: !backend.busy; onClicked: backend.saveMicrosoftClient(microsoftClient.text) }
+            PlainLabel { text: "User API keys and OAuth tokens stay private. A desktop registration identifies the app; it cannot act as a confidential backend credential."; wrapMode: Text.WordWrap; Layout.fillWidth: true; color: "#61765b" }
         }
     }
     Dialog {

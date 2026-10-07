@@ -20,6 +20,7 @@ from job_tracker.credentials import Credentials
 from job_tracker.db import Account
 from job_tracker.domain import now, timestamp
 from job_tracker.errors import UserFacingError
+from job_tracker.oauth import google_desktop_client
 from job_tracker.services import Tracker
 
 GMAIL_SCOPE = "https://www.googleapis.com/auth/gmail.readonly"
@@ -104,22 +105,15 @@ def register(tracker: Tracker, provider: str, address: str, reference: str, clie
 def connect_gmail(tracker: Tracker, vault: Credentials, config: dict, persist: bool):
     if persist:
         vault.backend()  # Fail before opening a consent flow if secure storage is unavailable.
-    installed = config.get("installed")
-    if not installed or not installed.get("client_id", "").endswith(".apps.googleusercontent.com"):
-        raise ValueError("Choose a Google OAuth client JSON for a Desktop application.")
-    installed = dict(installed)
-    installed.update(
-        auth_uri="https://accounts.google.com/o/oauth2/auth",
-        token_uri="https://oauth2.googleapis.com/token",
-    )
     flow = InstalledAppFlow.from_client_config(
-        {"installed": installed}, [GMAIL_SCOPE], autogenerate_code_verifier=True
+        google_desktop_client(config), [GMAIL_SCOPE], autogenerate_code_verifier=True
     )
     token = flow.run_local_server(
         host="127.0.0.1",
         port=0,
         timeout_seconds=180,
         authorization_prompt_message="",
+        success_message="Sign-in completed. Close this browser tab and return to Job Tracker AI.",
         prompt="consent",
     )
     with httpx.Client(timeout=30) as client:
@@ -155,7 +149,26 @@ def connect_outlook(tracker: Tracker, vault: Credentials, client_id: str, persis
     app, cache = microsoft_app(client_id)
     result = app.acquire_token_interactive(scopes=GRAPH_SCOPES, timeout=180)
     if "access_token" not in result:
-        raise ValueError("Microsoft sign-in did not complete. Check the app registration.")
+        code = result.get("error")
+        messages = {
+            "access_denied": "Microsoft sign-in was cancelled or denied. Try connecting again.",
+            "invalid_client": (
+                "Microsoft app registration is invalid. Check the client ID and localhost redirect."
+            ),
+            "unauthorized_client": (
+                "This Microsoft app cannot sign in this account type. Check Supported accounts."
+            ),
+            "invalid_scope": (
+                "Microsoft permissions are incomplete. Add delegated Mail.Read and User.Read."
+            ),
+        }
+        raise UserFacingError(
+            messages.get(
+                code,
+                "Microsoft sign-in did not finish. "
+                "Check the browser and app registration, then reconnect Outlook.",
+            )
+        )
     with httpx.Client(timeout=30) as client:
         response = client.get(
             "https://graph.microsoft.com/v1.0/me",
@@ -163,7 +176,24 @@ def connect_outlook(tracker: Tracker, vault: Credentials, client_id: str, persis
         )
         response.raise_for_status()
         profile = response.json()
-        address = profile.get("mail") or profile["userPrincipalName"]
+        address = profile.get("mail") or profile.get("userPrincipalName")
+        if not address:
+            raise UserFacingError(
+                "Microsoft sign-in succeeded, but the account profile has no mailbox address. "
+                "Check User.Read and use an Outlook mailbox."
+            )
+        mailbox = client.get(
+            "https://graph.microsoft.com/v1.0/me/messages",
+            headers={"Authorization": f"Bearer {result['access_token']}"},
+            params={"$select": "id", "$top": 1},
+        )
+        if mailbox.status_code in (400, 403, 404):
+            raise UserFacingError(
+                "Microsoft sign-in succeeded, but Outlook mailbox access failed. "
+                "Check delegated Mail.Read and use an account with an Outlook mailbox. "
+                "A work/school administrator may need to allow this app."
+            )
+        mailbox.raise_for_status()
     reference = "outlook-" + uuid4().hex
     vault.save(reference, json.dumps({"cache": cache.serialize(), "_persist": persist}), persist)
     register(tracker, "outlook", address, reference, client_id)
