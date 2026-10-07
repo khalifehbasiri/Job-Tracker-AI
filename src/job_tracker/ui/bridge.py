@@ -1,0 +1,416 @@
+"""Expose application services to QML without putting business rules in the UI."""
+
+import calendar
+import json
+from datetime import UTC, date, datetime, timedelta
+from pathlib import Path
+
+from PySide6.QtCore import Property, QObject, QRunnable, QThreadPool, QTimer, Signal, Slot
+from PySide6.QtWidgets import QFileDialog
+from sqlalchemy import select
+
+from job_tracker.ai import Analyzer
+from job_tracker.credentials import Credentials
+from job_tracker.db import Account, Usage
+from job_tracker.email import connect_gmail, connect_outlook
+from job_tracker.excel import export_search, import_rows, preview_import
+from job_tracker.services import Tracker
+from job_tracker.worker import Importer
+
+
+class Signals(QObject):
+    success = Signal(object)
+    failed = Signal(str)
+    progress = Signal(str)
+
+
+class Work(QRunnable):
+    def __init__(self, action):
+        super().__init__()
+        self.action = action
+        self.signals = Signals()
+
+    def run(self):
+        try:
+            self.signals.success.emit(self.action())
+        except Exception:
+            self.signals.failed.emit(
+                "Could not complete the operation. Check your configuration, connection, "
+                "file format, and spending limit. No credentials were logged."
+            )
+
+
+class Bridge(QObject):
+    changed = Signal()
+    importReady = Signal()
+    scanReady = Signal()
+
+    def __init__(self, tracker: Tracker, vault: Credentials, parent=None):
+        super().__init__(parent)
+        self.tracker, self.vault = tracker, vault
+        self.importer = Importer(tracker, vault)
+        self.pool = QThreadPool(self)
+        self.pool.setMaxThreadCount(1)
+        self._busy = False
+        self._message = "Your records stay on this computer. AI is optional."
+        self._search_id = int(tracker.get_setting("selected_search", "0"))
+        self._events, self._import_preview, self._scan_plan = [], {}, {}
+        self._import_path = ""
+        self._estimate = {}
+        self._tray = False
+        self._work = None
+        if not tracker.searches():
+            self._search_id = tracker.create_search("My job search")
+        self.refresh()
+        self.timer = QTimer(self)
+        self.timer.setInterval(300000)
+        self.timer.timeout.connect(self.poll)
+        self.timer.start()
+
+    def refresh(self):
+        self._searches = self.tracker.searches()
+        if self._search_id not in [item["id"] for item in self._searches]:
+            self._search_id = self._searches[0]["id"]
+        self._apps = self.tracker.applications(self._search_id)
+        self._tasks = self.tracker.tasks(self._search_id)
+        self._reviews = self.tracker.reviews(self._search_id)
+        self._scans = self.importer.scans(self._search_id)
+        self._accounts = [
+            {**item, "connected": bool(self.vault.get(item["credential_ref"]))}
+            for item in self.tracker.accounts()
+        ]
+        self.changed.emit()
+
+    searches = Property("QVariantList", lambda self: self._searches, notify=changed)
+    applications = Property("QVariantList", lambda self: self._apps, notify=changed)
+    tasks = Property("QVariantList", lambda self: self._tasks, notify=changed)
+    reviews = Property("QVariantList", lambda self: self._reviews, notify=changed)
+    scans = Property("QVariantList", lambda self: self._scans, notify=changed)
+    accounts = Property("QVariantList", lambda self: self._accounts, notify=changed)
+    events = Property("QVariantList", lambda self: self._events, notify=changed)
+    selectedSearch = Property(int, lambda self: self._search_id, notify=changed)
+    busy = Property(bool, lambda self: self._busy, notify=changed)
+    message = Property(str, lambda self: self._message, notify=changed)
+    apiReady = Property(bool, lambda self: bool(self.vault.get("openai")), notify=changed)
+    aiEnabled = Property(
+        bool, lambda self: self.tracker.get_setting("ai_enabled") == "true", notify=changed
+    )
+    syncBudget = Property(
+        str, lambda self: self.tracker.get_setting("sync_budget", "0.25"), notify=changed
+    )
+    dailyBudget = Property(
+        str, lambda self: self.tracker.get_setting("daily_budget", "1.00"), notify=changed
+    )
+    estimate = Property("QVariantMap", lambda self: self._estimate, notify=changed)
+    importPreview = Property(
+        "QVariantMap",
+        lambda self: {
+            key: self._import_preview.get(key, [] if key != "count" else 0)
+            for key in ("headers", "samples", "count")
+        },
+        notify=changed,
+    )
+    trayAvailable = Property(bool, lambda self: self._tray, notify=changed)
+    dataPath = Property(str, lambda self: str(self.tracker.db.path), constant=True)
+
+    def feedback(self, text):
+        self._message = text
+        self.changed.emit()
+
+    def local(self, action):
+        if self._busy:
+            return
+        try:
+            action()
+            self.refresh()
+        except ValueError:
+            self.feedback(
+                "Check the required fields, date format (YYYY-MM-DD), and selected record."
+            )
+        except Exception:
+            self.feedback("Could not save the change. Your existing records are preserved.")
+
+    def background(self, action, complete=lambda _result: None):
+        if self._busy:
+            self.feedback("Wait for the current operation, or pause the scan first.")
+            return
+        self._busy = True
+        self.changed.emit()
+        work = Work(action)
+        self._work = work
+        work.signals.progress.connect(self.feedback)
+
+        def finished(result):
+            self._busy = False
+            complete(result)
+            self.refresh()
+
+        def failed(text):
+            self._busy = False
+            self.feedback(text)
+            self.refresh()
+
+        work.signals.success.connect(finished)
+        work.signals.failed.connect(failed)
+        self.pool.start(work)
+
+    @Slot(int)
+    def selectSearch(self, search_id):
+        if self._busy:
+            return
+        self._search_id = search_id
+        self.tracker.set_setting("selected_search", str(search_id))
+        self.refresh()
+
+    @Slot(str, str, str)
+    def createSearch(self, name, start, end):
+        def action():
+            self._search_id = self.tracker.create_search(name, start, end)
+            self.feedback("Job search created.")
+
+        self.local(action)
+
+    @Slot(bool)
+    def archiveSearch(self, archived):
+        self.local(lambda: self.tracker.archive_search(self._search_id, archived))
+
+    @Slot(str, int)
+    def saveApplication(self, data, application_id):
+        def action():
+            self.tracker.save_application(self._search_id, json.loads(data), application_id)
+            self.feedback("Application saved.")
+
+        self.local(action)
+
+    @Slot(int, int)
+    def moveApplication(self, application_id, destination):
+        self.local(lambda: self.tracker.move_application(application_id, destination))
+
+    @Slot(int)
+    def showEvents(self, application_id):
+        self._events = self.tracker.events(application_id)
+        self.changed.emit()
+
+    @Slot(int, bool)
+    def completeTask(self, task_id, completed):
+        self.local(lambda: self.tracker.complete_task(task_id, completed))
+
+    @Slot(int, int, bool)
+    def resolveReview(self, review_id, application_id, ignore):
+        self.local(lambda: self.tracker.resolve_review(review_id, application_id, ignore))
+
+    @Slot()
+    def exportExcel(self):
+        path, _ = QFileDialog.getSaveFileName(
+            None, "Export this search", "Job search.xlsx", "Excel workbooks (*.xlsx)"
+        )
+        if path:
+            search_id = self._search_id
+            self.background(
+                lambda: export_search(self.tracker, search_id, Path(path)),
+                lambda _: self.feedback("Excel snapshot exported. No API calls were used."),
+            )
+
+    @Slot()
+    def previewExcel(self):
+        path, _ = QFileDialog.getOpenFileName(
+            None, "Import a tracker", "", "Excel workbooks (*.xlsx)"
+        )
+        if path:
+            self._import_path = path
+
+            def complete(preview):
+                self._import_preview = preview
+                self.importReady.emit()
+
+            self.background(lambda: preview_import(Path(path)), complete)
+
+    @Slot(str)
+    def importExcel(self, mapping):
+        search_id = self._search_id
+        self.background(
+            lambda: import_rows(self.tracker, search_id, self._import_preview, json.loads(mapping)),
+            lambda result: self.feedback(
+                f"Imported {result[0]} records; skipped {result[1]} duplicates."
+            ),
+        )
+
+    @Slot()
+    def backupDatabase(self):
+        path, _ = QFileDialog.getSaveFileName(
+            None, "Save a database backup", "Job tracker.sqlite3", "SQLite database (*.sqlite3)"
+        )
+        if path:
+            self.background(
+                lambda: self.tracker.backup(Path(path)),
+                lambda _: self.feedback("Database backup saved. Credentials are excluded."),
+            )
+
+    @Slot(str, bool)
+    def saveKey(self, value, persist):
+        self.local(lambda: self.vault.save("openai", value, persist))
+        if self.vault.get("openai"):
+            self.feedback("API key configured. AI requests use your OpenAI account.")
+
+    @Slot()
+    def removeKey(self):
+        self.local(lambda: self.vault.remove("openai"))
+
+    @Slot()
+    def testKey(self):
+        def test():
+            analyzer = Analyzer(self.vault.get("openai"))
+            try:
+                analyzer.test()
+            finally:
+                analyzer.close()
+
+        self.background(
+            test, lambda _: self.feedback("Key accepted; extraction model is accessible.")
+        )
+
+    @Slot(bool, str, str)
+    def configureAI(self, enabled, sync_budget, daily_budget):
+        def action():
+            import math
+
+            for value in (sync_budget, daily_budget):
+                if not math.isfinite(float(value)) or not 0 < float(value) <= 10000:
+                    raise ValueError("Enter a positive budget.")
+            self.tracker.set_setting("ai_enabled", "true" if enabled else "false")
+            self.tracker.set_setting("sync_budget", sync_budget)
+            self.tracker.set_setting("daily_budget", daily_budget)
+            self.feedback("Automatic processing settings saved.")
+
+        self.local(action)
+
+    @Slot(bool)
+    def connectGmail(self, persist):
+        path, _ = QFileDialog.getOpenFileName(
+            None, "Google Desktop OAuth client", "", "JSON (*.json)"
+        )
+        if path:
+
+            def connect():
+                config = json.loads(Path(path).read_text(encoding="utf-8"))
+                return connect_gmail(self.tracker, self.vault, config, persist)
+
+            self.background(
+                connect, lambda address: self.feedback(f"Connected {address} read-only.")
+            )
+
+    @Slot(str, bool)
+    def connectOutlook(self, client_id, persist):
+        self.background(
+            lambda: connect_outlook(self.tracker, self.vault, client_id.strip(), persist),
+            lambda address: self.feedback(f"Connected {address} read-only."),
+        )
+
+    @Slot(int)
+    def disconnectAccount(self, account_id):
+        def action():
+            with self.tracker.db.sessions.begin() as session:
+                account = session.get(Account, account_id)
+                if account and account.credential_ref:
+                    self.vault.remove(account.credential_ref)
+                    account.credential_ref = ""
+
+        self.local(action)
+
+    @Slot(int, result=str)
+    def historyStart(self, months):
+        today = datetime.now(UTC).date()
+        index = today.year * 12 + today.month - 1 - months
+        year, month = divmod(index, 12)
+        month += 1
+        return date(year, month, min(today.day, calendar.monthrange(year, month)[1])).isoformat()
+
+    @Slot(str, str)
+    def previewHistory(self, start, end):
+        def preview():
+            since = date.fromisoformat(start).isoformat() + "T00:00:00+00:00"
+            until = (date.fromisoformat(end) + timedelta(days=1)).isoformat() + "T00:00:00+00:00"
+            return self.importer.preview(since, until)
+
+        def complete(plan):
+            self._scan_plan = plan | {"search_id": self._search_id}
+            self._estimate = plan["estimate"] | {"total": plan["total"]}
+            self.scanReady.emit()
+
+        self.background(preview, complete)
+
+    @Slot(float)
+    def startHistory(self, budget):
+        if not self._scan_plan or self._scan_plan["search_id"] != self._search_id:
+            self.feedback("Preview the email range for this search first.")
+            return
+        if not self.vault.get("openai"):
+            self.feedback("Add your API key in Settings first.")
+            return
+        plan, search_id = self._scan_plan, self._search_id
+
+        def run():
+            scan_id = self.importer.create_scan(search_id, plan, budget)
+            return self.importer.run(scan_id, plan, self._work.signals.progress.emit)
+
+        self.background(run, self.scanFinished)
+
+    def scanFinished(self, scan):
+        self.feedback(
+            f"Scan {scan['state']}. Recorded usage/reservations: ${scan['spent']:.4f} USD."
+        )
+
+    @Slot()
+    def pauseScan(self):
+        self.importer.cancelled.set()
+        self.feedback("Pausing after the current request. Completed work will be kept.")
+
+    @Slot(int, float)
+    def resumeScan(self, scan_id, budget):
+        self.background(lambda: self.importer.resume(scan_id, budget), self.scanFinished)
+
+    @Slot()
+    def poll(self):
+        if self._busy or not self.aiEnabled or not self.apiReady:
+            return
+        if any(item["state"] != "completed" for item in self._scans):
+            return
+        selected = next(item for item in self._searches if item["id"] == self._search_id)
+        if selected["archived"]:
+            return
+        accounts = [item for item in self._accounts if item["connected"]]
+        if not accounts:
+            return
+        with self.tracker.db.sessions() as session:
+            spent = sum(
+                session.scalars(
+                    select(Usage.cost).where(
+                        Usage.created_at >= datetime.now(UTC).date().isoformat()
+                    )
+                )
+            )
+        budget = min(float(self.syncBudget), float(self.dailyBudget) - spent)
+        if budget <= 0:
+            self.feedback("Daily AI spending limit reached. Automatic sync is paused.")
+            return
+        end = datetime.now(UTC).isoformat(timespec="seconds")
+        start = min(item["last_sync"] or end for item in accounts)
+        start = (datetime.fromisoformat(start) - timedelta(minutes=5)).isoformat(timespec="seconds")
+        search_id = self._search_id
+
+        def run():
+            plan = self.importer.preview(start, end)
+            scan_id = self.importer.create_scan(search_id, plan, budget)
+            result = self.importer.run(scan_id, plan)
+            if result["state"] == "completed":
+                with self.tracker.db.sessions.begin() as session:
+                    for item in accounts:
+                        session.get(Account, item["id"]).last_sync = end
+            return result
+
+        self.background(run, self.scanFinished)
+
+    def stop(self):
+        self.timer.stop()
+        self.importer.cancelled.set()
+        self.pool.waitForDone()
