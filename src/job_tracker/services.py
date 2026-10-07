@@ -166,6 +166,7 @@ class Tracker:
             "ai_enabled",
             "sync_budget",
             "selected_search",
+            "daily_budget",
         }
         if key not in allowed:
             raise ValueError("This setting cannot be stored in the database.")
