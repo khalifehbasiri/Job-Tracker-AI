@@ -12,7 +12,7 @@ from job_tracker.ai import RATES, Analyzer, estimated_cost
 from job_tracker.db import Account, Application, ApplicationEvent, Job, Message, Review, Scan, Usage
 from job_tracker.domain import ApplicationInput, now, timestamp
 from job_tracker.email import Mailbox
-from job_tracker.errors import UserFacingError, blocks_scan, describe_error
+from job_tracker.errors import ReviewRequired, UserFacingError, blocks_scan, describe_error
 from job_tracker.services import Tracker, record
 
 
@@ -97,14 +97,14 @@ class Importer:
         ]
         if not accounts:
             raise UserFacingError("Connect a mailbox in Settings first.")
-        candidates, uncached, total = {}, 0, 0
+        candidates, dates, uncached, total = {}, {}, 0, 0
         for account in accounts:
-            ids = self.mailbox_factory(account, self.vault).list_ids(
-                start, end, self.cancelled.is_set
-            )
+            mailbox = self.mailbox_factory(account, self.vault)
+            ids = mailbox.list_ids(start, end, self.cancelled.is_set)
             if self.cancelled.is_set():
                 raise BudgetReached("Scan paused. Preview the range again to continue.")
             candidates[str(account["id"])] = ids
+            dates[str(account["id"])] = getattr(mailbox, "received_dates", {})
             total += len(ids)
             with self.tracker.db.sessions() as session:
                 known = set()
@@ -121,6 +121,7 @@ class Importer:
             "start": start,
             "end": end,
             "candidates": candidates,
+            "dates": dates,
             "total": total,
             "estimate": estimated_cost(uncached),
         }
@@ -169,7 +170,9 @@ class Importer:
             session.flush()
             return usage.id
 
-    def stage_message(self, account: dict, provider_id: str, scan_id: int, search_id: int) -> int:
+    def stage_message(
+        self, account: dict, provider_id: str, scan_id: int, search_id: int, received_at=""
+    ) -> int:
         with self.tracker.db.sessions.begin() as session:
             message = session.scalar(
                 select(Message).where(
@@ -184,12 +187,14 @@ class Importer:
                     sender="",
                     subject="",
                     body="",
-                    received_at="",
+                    received_at=received_at,
                     state="fetch_pending",
                 )
                 session.add(message)
                 session.flush()
             message_id = message.id
+            if not message.received_at and received_at:
+                message.received_at = received_at
         with self.tracker.db.sessions.begin() as session:
             job = session.scalar(
                 select(Job).where(Job.message_id == message_id, Job.search_id == search_id)
@@ -214,6 +219,22 @@ class Importer:
             result = json.loads(message.result_json or "{}")
             account = record(session.get(Account, message.account_id))
 
+        if result.get("review_reason"):
+            self.require_review(job_id, result, result["review_reason"])
+            return
+        if (
+            job.error
+            == "The record or provider response could not be validated. Check setup or retry."
+            and result.get("kind")
+        ):
+            self.require_review(
+                job_id,
+                result,
+                "The previous AI extraction could not be validated. "
+                "Review manually without another API charge.",
+            )
+            return
+
         if message.state == "fetch_pending":
             try:
                 mail = self.mailbox_factory(account, self.vault).get(message.provider_id)
@@ -230,6 +251,12 @@ class Importer:
                 for key, value in vars(mail).items():
                     setattr(message, key, value)
                 message.state = "pending"
+
+        if not message.body.strip():
+            self.require_review(
+                job_id, result, "This email has no readable body. Review it manually."
+            )
+            return
 
         def bill(operation, model, amount):
             return self.bill(job.scan_id, message.id, operation, model, amount)
@@ -287,6 +314,41 @@ class Importer:
                 job.state = "review"
             session.get(Message, message.id).state = "processed"
 
+    def require_review(self, job_id, result, reason, extraction=None):
+        result = {"probability": 0.5, "confidence": 0, "kind": "other"} | result
+        result["review_reason"] = reason
+        result["extraction"] = (
+            extraction
+            or result.get("extraction")
+            or {
+                key: None
+                for key in (
+                    "company",
+                    "role",
+                    "requisition_id",
+                    "applied_on",
+                    "deadline_at",
+                    "interview_at",
+                )
+            }
+            | {"evidence": ""}
+        )
+        with self.tracker.db.sessions.begin() as session:
+            job = session.get(Job, job_id)
+            message = session.get(Message, job.message_id)
+            message.result_json = json.dumps(result)
+            message.state = "processed"
+            if session.scalar(select(Review.id).where(Review.job_id == job_id)) is None:
+                session.add(
+                    Review(
+                        job_id=job_id,
+                        search_id=job.search_id,
+                        proposed_json=json.dumps(result),
+                        reason=reason,
+                    )
+                )
+            job.state, job.error, job.retry_at = "review", "", ""
+
     def run(self, scan_id: int, plan: dict | None = None, progress=lambda _text: None):
         with self.tracker.db.sessions.begin() as session:
             scan = session.get(Scan, scan_id)
@@ -307,10 +369,14 @@ class Importer:
                     progress(f"Queuing email {index + 1} of {len(ids)}…")
                     staged.append(
                         self.stage_message(
-                            accounts[int(account_id)], provider_id, scan_id, scan.search_id
+                            accounts[int(account_id)],
+                            provider_id,
+                            scan_id,
+                            scan.search_id,
+                            plan.get("dates", {}).get(account_id, {}).get(provider_id, ""),
                         )
                     )
-            # Already-downloaded emails (including old stalled scans) are processed first.
+            # Sort across all mailboxes using actual dates, including durable resumed jobs.
             with self.tracker.db.sessions() as session:
                 unfinished = session.scalars(
                     select(Job.id).where(
@@ -318,14 +384,32 @@ class Importer:
                     )
                 )
                 staged = list(dict.fromkeys([*staged, *unfinished]))
-                saved = set(
-                    session.scalars(
-                        select(Job.id)
-                        .join(Message)
-                        .where(Job.scan_id == scan_id, Message.state != "fetch_pending")
-                    )
-                )
-            staged.sort(key=lambda job_id: job_id not in saved)
+            dated = []
+            for index, job_id in enumerate(staged):
+                if self.cancelled.is_set():
+                    raise BudgetReached("Scan paused; resume to continue.")
+                with self.tracker.db.sessions() as session:
+                    job = session.get(Job, job_id)
+                    message = session.get(Message, job.message_id)
+                if job.state in ("done", "review", "unavailable"):
+                    continue
+                if not message.received_at:
+                    progress(f"Reading email dates {index + 1} of {len(staged)}…")
+                    mailbox = self.mailbox_factory(accounts[message.account_id], self.vault)
+                    try:
+                        received = mailbox.received_at(message.provider_id)
+                    except httpx.HTTPStatusError as error:
+                        if error.response.status_code != 404:
+                            raise
+                        with self.tracker.db.sessions.begin() as session:
+                            session.get(Job, job_id).state = "unavailable"
+                            session.get(Message, message.id).state = "unavailable"
+                        continue
+                    with self.tracker.db.sessions.begin() as session:
+                        session.get(Message, message.id).received_at = timestamp(received)
+                    message.received_at = timestamp(received)
+                dated.append((message.received_at, message.state == "fetch_pending", job_id))
+            staged = [row[2] for row in sorted(dated)]
             # Every identity is durable. Only a fully resolved queue advances sync checkpoints.
             for index, job_id in enumerate(staged):
                 if self.cancelled.is_set():
@@ -333,6 +417,13 @@ class Importer:
                 progress(f"Processing email {index + 1} of {len(staged)}…")
                 try:
                     self.process(job_id, analyzer)
+                except ReviewRequired as error:
+                    with self.tracker.db.sessions() as session:
+                        job = session.get(Job, job_id)
+                        result = json.loads(
+                            session.get(Message, job.message_id).result_json or "{}"
+                        )
+                    self.require_review(job_id, result, str(error), error.extraction)
                 except BudgetReached:
                     with self.tracker.db.sessions.begin() as session:
                         session.get(Job, job_id).attempts -= 1
@@ -356,6 +447,8 @@ class Importer:
                     )
                 )
                 session.get(Scan, scan_id).state = "paused" if pending else "completed"
+                if not pending:
+                    session.get(Scan, scan_id).error = ""
         except BudgetReached as error:
             with self.tracker.db.sessions.begin() as session:
                 session.get(Scan, scan_id).state = "paused"

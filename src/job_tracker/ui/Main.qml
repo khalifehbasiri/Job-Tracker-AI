@@ -90,13 +90,15 @@ ApplicationWindow {
                 ActionButton { text: "+ New search"; enabled: !backend.busy; onClicked: searchDialog.open() }
             }
             Rectangle {
-                Layout.fillWidth: true; implicitHeight: statusText.implicitHeight + 24
+                objectName: "statusBanner"
+                Layout.fillWidth: true; implicitHeight: statusRow.implicitHeight + 24
                 color: "#e6ede4"; radius: 10
                 RowLayout {
+                    id: statusRow
                     anchors.fill: parent; anchors.margins: 12
                     BusyIndicator { running: backend.busy; visible: running; implicitWidth: 22; implicitHeight: 22 }
-                    PlainLabel { id: statusText; text: backend.message; color: "#3b594c"; wrapMode: Text.WordWrap; Layout.fillWidth: true; font.pixelSize: 12 }
-                    ActionButton { visible: backend.busy; text: "Pause scan"; onClicked: backend.pauseScan() }
+                    PlainLabel { id: statusText; objectName: "statusText"; text: backend.message; color: "#3b594c"; wrapMode: Text.WordWrap; Layout.fillWidth: true; Layout.alignment: Qt.AlignVCenter; font.pixelSize: 12 }
+                    ActionButton { objectName: "pauseScanButton"; visible: backend.scanActive; Layout.alignment: Qt.AlignVCenter; text: "Pause scan"; onClicked: backend.pauseScan() }
                 }
             }
             StackLayout {
@@ -278,7 +280,7 @@ ApplicationWindow {
                             ColumnLayout {
                                 anchors.fill: parent; spacing: 15
                                 PlainLabel { text: "Reconstruct a past job search"; font.bold: true; font.pixelSize: 20; color: "#2b4434" }
-                                PlainLabel { text: "Scan connected mailboxes for application emails. Preview first, then set your spending limit.\nRepeated scans reuse saved results. Email dates below use UTC."; color: "#788773"; wrapMode: Text.WordWrap; Layout.fillWidth: true }
+                                PlainLabel { text: "Scan connected mailboxes from oldest to newest. Preview first, then set your spending limit.\nRepeated scans reuse saved results. Email dates below use UTC."; color: "#788773"; wrapMode: Text.WordWrap; Layout.fillWidth: true }
                                 RowLayout {
                                     ComboBox { model: ["Last month", "Last 3 months", "Last 6 months", "Last year", "Custom"]; onActivated: { if (currentIndex < 4) scanStart.text = backend.historyStart([1, 3, 6, 12][currentIndex]) } }
                                     Field { id: scanStart; text: backend.historyStart(1); placeholderText: "Start YYYY-MM-DD" }

@@ -84,6 +84,13 @@ class Extraction(BaseModel):
                 raise ValueError("Extracted field too long.")
         return value or None
 
+    @field_validator("company", "requisition_id")
+    @classmethod
+    def short_field(cls, value: str | None) -> str | None:
+        if value and len(value) > 200:
+            raise ValueError("Extracted field too long.")
+        return value
+
     @field_validator("applied_on")
     @classmethod
     def check_date(cls, value: str | None) -> str | None:

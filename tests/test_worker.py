@@ -54,6 +54,9 @@ class FakeMailbox:
     def list_ids(self, start, end, cancelled=lambda: False):
         return ["message-1"]
 
+    def received_at(self, provider_id):
+        return "2026-10-01T12:00:00+00:00"
+
     def get(self, provider_id):
         return Email(
             provider_id,

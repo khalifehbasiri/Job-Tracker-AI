@@ -2,7 +2,7 @@ import json
 from pathlib import Path
 
 import pytest
-from PySide6.QtCore import QThread, QUrl
+from PySide6.QtCore import QObject, QThread, QUrl
 from PySide6.QtQml import QQmlApplicationEngine
 from PySide6.QtQuick import QQuickWindow
 from PySide6.QtQuickControls2 import QQuickStyle
@@ -48,6 +48,23 @@ def test_qml_pages_and_live_records(qapp, qtbot, tracker):
         qtbot.wait(80)
         assert not window.grabWindow().isNull()
     assert bridge.selectedSearch == search
+    bridge._busy, bridge._operation = True, "scan"
+    bridge.feedback("Processing email 321 of 690…")
+    qtbot.wait(80)
+    banner = window.findChild(QObject, "statusBanner")
+    button = window.findChild(QObject, "pauseScanButton")
+    label = window.findChild(QObject, "statusText")
+    assert button.property("visible")
+    assert banner.property("height") >= button.property("height") + 24
+    assert button.property("y") == pytest.approx(
+        (banner.property("height") - 24 - button.property("height")) / 2
+    )
+    assert label.property("y") >= 0
+    bridge._operation = "oauth"
+    bridge.changed.emit()
+    qtbot.wait(30)
+    assert not button.property("visible")
+    bridge._busy = False
     assert not warnings, "\n".join(warnings)
     window.close()
     engine.deleteLater()

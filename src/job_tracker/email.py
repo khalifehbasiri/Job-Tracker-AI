@@ -214,6 +214,7 @@ class Mailbox:
 
     def list_ids(self, start: str, end: str, cancelled=lambda: False) -> list[str]:
         headers = self.headers()
+        self.received_dates = {}
         ids, page = [], ""
         with httpx.Client(timeout=30) as client:
             while not cancelled():
@@ -240,7 +241,8 @@ class Mailbox:
                         if page
                         else {
                             "$filter": f"receivedDateTime ge {start} and receivedDateTime lt {end}",
-                            "$select": "id",
+                            "$select": "id,receivedDateTime",
+                            "$orderby": "receivedDateTime asc",
                             "$top": 500,
                         }
                     )
@@ -249,6 +251,12 @@ class Mailbox:
                     response = read_request(client, url, headers=headers, params=params)
                     data = response.json()
                     ids.extend(row["id"] for row in data.get("value", []))
+                    self.received_dates.update(
+                        {
+                            row["id"]: timestamp(row["receivedDateTime"])
+                            for row in data.get("value", [])
+                        }
+                    )
                     page = data.get("@odata.nextLink", "")
                 if len(ids) > 50000:
                     raise UserFacingError(
@@ -257,6 +265,32 @@ class Mailbox:
                 if not page:
                     return ids
         return ids
+
+    def received_at(self, provider_id: str) -> str:
+        """Read only the actual timestamp to sort Gmail's unordered message listing."""
+        from datetime import UTC, datetime
+
+        with httpx.Client(timeout=30) as client:
+            if self.account["provider"] == "gmail":
+                response = read_request(
+                    client,
+                    "https://gmail.googleapis.com/gmail/v1/users/me/messages/"
+                    + quote(provider_id, safe=""),
+                    headers=self.headers(),
+                    params={"format": "minimal", "fields": "internalDate"},
+                )
+                return timestamp(
+                    datetime.fromtimestamp(
+                        int(response.json()["internalDate"]) / 1000, UTC
+                    ).isoformat()
+                )
+            response = read_request(
+                client,
+                "https://graph.microsoft.com/v1.0/me/messages/" + quote(provider_id, safe=""),
+                headers=self.headers(),
+                params={"$select": "receivedDateTime"},
+            )
+            return timestamp(response.json()["receivedDateTime"])
 
     def get(self, provider_id: str) -> Email:
         headers = self.headers()

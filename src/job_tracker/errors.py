@@ -10,6 +10,14 @@ class UserFacingError(ValueError):
     """Only raise with an application-authored, non-private message."""
 
 
+class ReviewRequired(UserFacingError):
+    """An unusable AI result is terminal for automatic processing, not a paid retry."""
+
+    def __init__(self, reason, extraction=None):
+        super().__init__(reason)
+        self.extraction = extraction
+
+
 def describe_error(error: Exception) -> str:
     if isinstance(error, UserFacingError):
         return str(error)

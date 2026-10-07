@@ -3,9 +3,10 @@
 import json
 
 from openai import OpenAI
+from pydantic import ValidationError
 
 from job_tracker.domain import Extraction
-from job_tracker.errors import UserFacingError
+from job_tracker.errors import ReviewRequired, UserFacingError
 
 DECISION_MODEL = "gpt-6-luna"
 EXTRACTION_MODEL = "gpt-5.4-mini"
@@ -100,7 +101,7 @@ class Analyzer:
         bill("settle", receipt, result.usage.model_dump())
         answers = {answer.name: answer for answer in result.answers}
         if any(answer.type == "refusal" for answer in answers.values()):
-            raise ValueError("The classifier declined this email; review it manually.")
+            raise ReviewRequired("The classifier declined this email. Review it manually.")
         relevant, event = answers["job_related"], answers["event"]
         return {
             "probability": relevant.probability,
@@ -131,8 +132,18 @@ class Analyzer:
         )
         bill("settle", receipt, result.usage.model_dump())
         if result.status != "completed":
-            raise ValueError("Extraction did not complete; retry or review the email.")
-        extracted = Extraction.model_validate_json(result.output_text)
+            raise ReviewRequired("AI extraction did not complete. Review the email manually.")
+        try:
+            extracted = Extraction.model_validate_json(result.output_text)
+        except ValidationError as error:
+            raise ReviewRequired(
+                "AI returned fields or dates that could not be validated. "
+                "Review the email manually."
+            ) from error
         if not extracted.evidence.strip() or extracted.evidence not in message.body:
-            raise ValueError("Extraction evidence was not found in the email; review it manually.")
+            fields = extracted.model_dump() | {"evidence": ""}
+            raise ReviewRequired(
+                "AI evidence did not match the email text. Confirm the proposed fields manually.",
+                fields,
+            )
         return extracted.model_dump()

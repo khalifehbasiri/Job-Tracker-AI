@@ -52,6 +52,7 @@ class Bridge(QObject):
         self.pool = QThreadPool(self)
         self.pool.setMaxThreadCount(1)
         self._busy = False
+        self._operation = ""
         self._message = "Your records stay on this computer. AI is optional."
         self._search_id = int(tracker.get_setting("selected_search", "0"))
         self._events, self._import_preview, self._scan_plan = [], {}, {}
@@ -98,6 +99,9 @@ class Bridge(QObject):
     events = Property("QVariantList", lambda self: self._events, notify=changed)
     selectedSearch = Property(int, lambda self: self._search_id, notify=changed)
     busy = Property(bool, lambda self: self._busy, notify=changed)
+    scanActive = Property(
+        bool, lambda self: self._busy and self._operation == "scan", notify=changed
+    )
     message = Property(str, lambda self: self._message, notify=changed)
     apiReady = Property(bool, lambda self: bool(self.vault.get("openai")), notify=changed)
     aiEnabled = Property(
@@ -139,7 +143,7 @@ class Bridge(QObject):
         except Exception:
             self.feedback("Could not save the change. Your existing records are preserved.")
 
-    def background(self, action, complete=lambda _result: None):
+    def background(self, action, complete=lambda _result: None, operation=""):
         if self._busy:
             self.feedback("Wait for the current operation, or pause the scan first.")
             return
@@ -147,6 +151,7 @@ class Bridge(QObject):
         # mailbox enumeration and AI processing inside the same background operation.
         self.importer.cancelled.clear()
         self._busy = True
+        self._operation = operation
         self.changed.emit()
         work = Work(action)
         self._work = work
@@ -154,11 +159,13 @@ class Bridge(QObject):
 
         def finished(result):
             self._busy = False
+            self._operation = ""
             complete(result)
             self.refresh()
 
         def failed(text):
             self._busy = False
+            self._operation = ""
             self.feedback(text)
             self.refresh()
 
@@ -355,7 +362,7 @@ class Bridge(QObject):
             self._estimate = plan["estimate"] | {"total": plan["total"]}
             self.scanReady.emit()
 
-        self.background(preview, complete)
+        self.background(preview, complete, operation="scan")
 
     @Slot(float)
     def startHistory(self, budget):
@@ -371,7 +378,7 @@ class Bridge(QObject):
             scan_id = self.importer.create_scan(search_id, plan, budget)
             return self.importer.run(scan_id, plan, self._work.signals.progress.emit)
 
-        self.background(run, self.scanFinished)
+        self.background(run, self.scanFinished, operation="scan")
 
     def scanFinished(self, scan):
         self.feedback(
@@ -386,7 +393,9 @@ class Bridge(QObject):
 
     @Slot(int, float)
     def resumeScan(self, scan_id, budget):
-        self.background(lambda: self.importer.resume(scan_id, budget), self.scanFinished)
+        self.background(
+            lambda: self.importer.resume(scan_id, budget), self.scanFinished, operation="scan"
+        )
 
     @Slot()
     def poll(self):
@@ -427,7 +436,7 @@ class Bridge(QObject):
                         session.get(Account, item["id"]).last_sync = end
             return result
 
-        self.background(run, self.scanFinished)
+        self.background(run, self.scanFinished, operation="scan")
 
     def stop(self):
         self.timer.stop()
