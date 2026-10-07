@@ -15,7 +15,7 @@ from job_tracker.db import Account, Usage
 from job_tracker.email import connect_gmail, connect_outlook
 from job_tracker.excel import export_search, import_rows, preview_import
 from job_tracker.services import Tracker
-from job_tracker.worker import Importer
+from job_tracker.worker import BudgetReached, Importer
 
 
 class Signals(QObject):
@@ -33,6 +33,8 @@ class Work(QRunnable):
     def run(self):
         try:
             self.signals.success.emit(self.action())
+        except BudgetReached as error:
+            self.signals.failed.emit(str(error))
         except Exception:
             self.signals.failed.emit(
                 "Could not complete the operation. Check your configuration, connection, "
@@ -135,6 +137,9 @@ class Bridge(QObject):
         if self._busy:
             self.feedback("Wait for the current operation, or pause the scan first.")
             return
+        # Reset on the UI thread before dispatch, so Pause/Quit cannot be lost between
+        # mailbox enumeration and AI processing inside the same background operation.
+        self.importer.cancelled.clear()
         self._busy = True
         self.changed.emit()
         work = Work(action)

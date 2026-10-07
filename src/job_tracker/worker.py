@@ -83,7 +83,8 @@ class Importer:
         self.cancelled = Event()
 
     def preview(self, start: str, end: str) -> dict:
-        self.cancelled.clear()
+        if self.cancelled.is_set():
+            raise BudgetReached("Scan paused. Preview the range again to continue.")
         start, end = timestamp(start), timestamp(end)
         if start >= end:
             raise ValueError("Choose an end date after the start date.")
@@ -99,6 +100,8 @@ class Importer:
             ids = self.mailbox_factory(account, self.vault).list_ids(
                 start, end, self.cancelled.is_set
             )
+            if self.cancelled.is_set():
+                raise BudgetReached("Scan paused. Preview the range again to continue.")
             candidates[str(account["id"])] = ids
             total += len(ids)
             with self.tracker.db.sessions() as session:
@@ -260,12 +263,13 @@ class Importer:
             session.get(Message, message.id).state = "processed"
 
     def run(self, scan_id: int, plan: dict | None = None, progress=lambda _text: None):
-        self.cancelled.clear()
         with self.tracker.db.sessions.begin() as session:
             scan = session.get(Scan, scan_id)
             scan.state = "running"
         analyzer = None
         try:
+            if self.cancelled.is_set():
+                raise BudgetReached("Scan paused; resume to continue.")
             analyzer = self.analyzer_factory(self.vault.get("openai"))
             plan = plan or self.preview(scan.start_at, scan.end_at)
             accounts = {row["id"]: row for row in self.tracker.accounts()}

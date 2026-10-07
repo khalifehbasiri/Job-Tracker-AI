@@ -6,7 +6,7 @@ from sqlalchemy import select
 from job_tracker.credentials import Credentials
 from job_tracker.db import Application, Job, Message, Usage
 from job_tracker.email import Email, normalize, register
-from job_tracker.worker import Importer, match_application
+from job_tracker.worker import BudgetReached, Importer, match_application
 
 
 class FakeAnalyzer:
@@ -88,6 +88,30 @@ def test_scan_deduplicates_and_reuses_ai(importer, tracker):
     importer.run(second, second_plan)
     assert FakeAnalyzer.calls == 1
     assert len(tracker.events(tracker.applications(search)[0]["id"])) == 1
+
+
+def test_cancelled_enumeration_cannot_advance_sync_checkpoint(importer):
+    class InterruptedMailbox(FakeMailbox):
+        def list_ids(self, start, end, cancelled=lambda: False):
+            importer.cancelled.set()
+            return ["only-part-of-mailbox"]
+
+    importer.mailbox_factory = InterruptedMailbox
+    with pytest.raises(BudgetReached, match="paused"):
+        importer.preview("2026-09-01T00:00:00Z", "2026-11-01T00:00:00Z")
+    assert importer.cancelled.is_set()
+
+
+def test_pause_between_preview_and_worker_dispatch_is_preserved(importer, tracker):
+    search = tracker.create_search("2026")
+    plan = importer.preview("2026-09-01T00:00:00Z", "2026-11-01T00:00:00Z")
+    scan = importer.create_scan(search, plan, 1)
+    importer.cancelled.set()
+    assert importer.run(scan, plan)["state"] == "paused"
+    assert FakeAnalyzer.calls == 0
+    assert not tracker.applications(search)
+    importer.cancelled.clear()  # A new user-started operation clears cancellation at dispatch.
+    assert importer.resume(scan, 1)["state"] == "completed"
 
 
 def test_conflicting_requisition_does_not_match_same_company_role(tracker):
