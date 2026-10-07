@@ -1,0 +1,25 @@
+# Privacy and local data
+
+Job Tracker AI has no developer-operated server, telemetry, advertising, or cloud database. The application connects directly to Google or Microsoft for email and to OpenAI for AI processing. These providers apply their own privacy and retention policies.
+
+## What is stored
+
+SQLite stores searches, applications, event history, tasks, mailbox addresses, provider message IDs, normalized sender/subject/body text, AI results, review items, scan checkpoints, and a usage ledger. The database lives in the OS application-data directory by default. Settings displays its location. It is not encrypted by this application.
+
+API keys and OAuth token caches are stored separately in a supported OS credential store. Session-only credentials remain in process memory. Replacing a saved API key with a session-only key removes the previous saved key when secure storage is available. Credentials are excluded from database backups and workbook exports. OAuth client JSON belongs outside the repository.
+
+## Email access and AI transmission
+
+Mailbox permissions are read-only. The app does not send, delete, or mark messages as read. It reads message IDs and, when processing a scan, the sender, subject, timestamps, thread identity, and body. It skips Gmail attachments and never follows email links or executes attachment content. Normalization strips HTML/script markup and common quoted reply chains, then limits body length.
+
+A historical preview lists message IDs and computes an estimate without calling OpenAI. Starting the scan authorizes sending message text for classification, including messages that ultimately prove unrelated to applications. Relevant or uncertain messages also undergo extraction. Automatic AI processing is opt-in and makes the same transmissions for new messages. Normalization is not anonymization; message text can include personal information.
+
+Extraction requests set `store=false`. This does not promise zero provider retention. Consult [OpenAI's API data controls](https://developers.openai.com/api/docs/guides/your-data), [Google's privacy policy](https://policies.google.com/privacy), and [Microsoft's privacy statement](https://privacy.microsoft.com/privacystatement).
+
+## Backups, deletion, and reports
+
+Excel exports include application records and event evidence excerpts, not full mailbox bodies. SQLite backups include the saved message text. Keep both private. An archived search still exists in the database.
+
+Disconnecting a mailbox removes its locally stored credentials and preserves records. Removing the API key stops future AI requests once any current request finishes. Revoke application consent in your provider account settings to revoke provider access. To erase local records, quit the application and delete the database and its associated WAL/SHM files; also remove any backups, exports, and demo database you no longer want. There is no in-app account-wide erase feature in this release.
+
+Never include real emails, API keys, tokens, databases, or private workbooks in public GitHub issues. Use fictional or redacted examples.

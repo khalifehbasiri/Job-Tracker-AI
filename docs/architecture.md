@@ -4,7 +4,7 @@
 
 Python 3.13, PySide6 with Qt Quick/QML, SQLite through SQLAlchemy, Alembic migrations, Pydantic validation, openpyxl import/export, and OS-backed keyring credentials. The GUI runs on the main thread; serialized background jobs run outside it. Network calls never hold database transactions open.
 
-Data is stored in the platform's local application-data directory, outside the checkout and cloud-sync folders. SQLite enables foreign keys, WAL, and a busy timeout. The live database is not synchronized through OneDrive; SQLite backup snapshots and Excel exports may be.
+Data is stored in the platform's local application-data directory, outside the checkout and cloud-sync folders. SQLite enables foreign keys, WAL, and a busy timeout. The desktop holds an OS file lock for its database so a second desktop cannot make competing AI requests. The live database is not synchronized through OneDrive; SQLite backup snapshots and Excel exports may be.
 
 ## Job searches
 
