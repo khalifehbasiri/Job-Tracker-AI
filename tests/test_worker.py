@@ -115,6 +115,34 @@ def test_conflicting_requisition_does_not_match_same_company_role(tracker):
         assert "conflicts" in reason
 
 
+def test_reminder_does_not_recreate_completed_task(importer, tracker):
+    search = tracker.create_search("2026")
+    application_id = tracker.save_application(search, {"company": "Company", "role": "Engineer"})
+    account_id = tracker.accounts()[0]["id"]
+    result = {
+        "kind": "assessment",
+        "extraction": {"evidence": "Due tomorrow", "deadline_at": "2026-10-02T12:00:00Z"},
+    }
+    for index in range(2):
+        with tracker.db.sessions.begin() as session:
+            message = Message(
+                account_id=account_id,
+                provider_id=f"reminder-{index}",
+                thread_id="thread",
+                sender="jobs@example.org",
+                subject="Reminder",
+                body="Due tomorrow",
+                received_at="2026-10-01T12:00:00+00:00",
+            )
+            session.add(message)
+            session.flush()
+            tracker.add_event(session, session.get(Application, application_id), message, result)
+        if index == 0:
+            tracker.complete_task(tracker.tasks(search)[0]["id"], True)
+    assert len(tracker.tasks(search)) == 1
+    assert tracker.tasks(search)[0]["completed"]
+
+
 def test_budget_stops_before_request_and_scan_resumes(importer, tracker):
     search = tracker.create_search("2026")
     plan = importer.preview("2026-09-01T00:00:00Z", "2026-11-01T00:00:00Z")

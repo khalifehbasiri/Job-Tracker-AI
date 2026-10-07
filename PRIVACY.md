@@ -20,6 +20,6 @@ Extraction requests set `store=false`. This does not promise zero provider reten
 
 Excel exports include application records and event evidence excerpts, not full mailbox bodies. SQLite backups include the saved message text. Keep both private. An archived search still exists in the database.
 
-Disconnecting a mailbox removes its locally stored credentials and preserves records. Removing the API key stops future AI requests once any current request finishes. Revoke application consent in your provider account settings to revoke provider access. To erase local records, quit the application and delete the database and its associated WAL/SHM files; also remove any backups, exports, and demo database you no longer want. There is no in-app account-wide erase feature in this release.
+Disconnecting a mailbox removes its locally stored credentials and preserves records. Removing the API key prevents subsequent AI scans; pause a running scan before changing credentials. Revoke application consent in your provider account settings to revoke provider access. To erase local records, quit the application and delete the database and its associated WAL/SHM files; also remove any backups, exports, and demo database you no longer want. There is no in-app account-wide erase feature in this release.
 
 Never include real emails, API keys, tokens, databases, or private workbooks in public GitHub issues. Use fictional or redacted examples.

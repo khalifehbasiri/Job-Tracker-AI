@@ -18,7 +18,7 @@ Inbound emails are untrusted data, never instructions. The classifier has no too
 
 ## Historical import and spending
 
-Import from email history supports 1, 3, 6, and 12 months plus custom dates. Count unprocessed messages, show a conservative token-based cost estimate, then request a user-selected budget and explicit start. Persist scan state and usage; allow cancellation and resuming. Deduplicate message IDs within each account and reuse results across overlapping imports. Reserve worst-case per-request costs before sending requests and stop before the budget is exhausted. Estimates are not provider billing statements.
+Import from email history supports 1, 3, 6, and 12 months plus custom dates, selecting UTC calendar days. Count unprocessed messages, show illustrative token-based cost scenarios, then request a user-selected budget and explicit start. Persist scan state and usage; allow cancellation and resuming. Deduplicate message IDs within each account and reuse results across overlapping imports. Reserve conservative per-request costs before sending requests and stop before the budget is exhausted. Estimates are not provider billing statements.
 
 ## Credentials and offline operation
 

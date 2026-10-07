@@ -205,14 +205,24 @@ class Tracker:
             app.stage, app.outcome = project_status(app.stage, app.outcome, kind)
             app.status_at = effective_at
         app.updated_at = now()
-        for field, title in (("deadline_at", "Assessment deadline"), ("interview_at", "Interview")):
+        deadline_title = (
+            "Assessment deadline" if kind == EventType.ASSESSMENT else "Application deadline"
+        )
+        for field, title in (("deadline_at", deadline_title), ("interview_at", "Interview")):
             if extraction.get(field):
+                due_at = timestamp(extraction[field])
+                if session.scalar(
+                    select(Task.id).where(
+                        Task.application_id == app.id, Task.title == title, Task.due_at == due_at
+                    )
+                ):
+                    continue  # Reminder emails should not recreate a task already completed.
                 session.add(
                     Task(
                         application_id=app.id,
                         event_id=event.id,
                         title=title,
-                        due_at=timestamp(extraction[field]),
+                        due_at=due_at,
                     )
                 )
 

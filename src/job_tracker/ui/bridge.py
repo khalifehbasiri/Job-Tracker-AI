@@ -167,6 +167,7 @@ class Bridge(QObject):
     def createSearch(self, name, start, end):
         def action():
             self._search_id = self.tracker.create_search(name, start, end)
+            self.tracker.set_setting("selected_search", str(self._search_id))
             self.feedback("Job search created.")
 
         self.local(action)
