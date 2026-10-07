@@ -5,6 +5,7 @@ import json
 from openai import OpenAI
 
 from job_tracker.domain import Extraction
+from job_tracker.errors import UserFacingError
 
 DECISION_MODEL = "gpt-6-luna"
 EXTRACTION_MODEL = "gpt-5.4-mini"
@@ -83,7 +84,7 @@ def estimated_cost(count: int) -> dict:
 class Analyzer:
     def __init__(self, key: str):
         if not key:
-            raise ValueError("Add your OpenAI API key in Settings.")
+            raise UserFacingError("Add your OpenAI API key in Settings.")
         self.client = OpenAI(api_key=key, max_retries=0, timeout=45)
 
     def close(self):

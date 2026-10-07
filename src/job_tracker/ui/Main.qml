@@ -300,6 +300,8 @@ ApplicationWindow {
                                         Layout.fillWidth: true
                                         PlainLabel { text: modelData.start_at.slice(0, 10) + " → " + modelData.end_at.slice(0, 10); font.bold: true; color: "#39523b" }
                                         PlainLabel { text: modelData.state + " · estimated usage / reservations $" + modelData.spent.toFixed(4) + " USD"; color: "#83907e" }
+                                        PlainLabel { text: modelData.processed + " processed · " + modelData.review_count + " for review · " + modelData.pending + " waiting · " + modelData.failed + " failed · " + modelData.unavailable + " unavailable"; wrapMode: Text.WordWrap; Layout.fillWidth: true; color: "#61765b" }
+                                        PlainLabel { visible: modelData.error.length > 0; text: modelData.error; wrapMode: Text.WordWrap; Layout.fillWidth: true; color: "#965b38" }
                                     }
                                     Field { id: resumeBudget; text: modelData.budget.toString(); Layout.preferredWidth: 80; placeholderText: "Budget USD"; visible: modelData.state !== "completed" }
                                     ActionButton { text: "Resume"; visible: modelData.state !== "completed"; enabled: !backend.busy; onClicked: backend.resumeScan(modelData.id, Number(resumeBudget.text)) }

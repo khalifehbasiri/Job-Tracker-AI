@@ -13,6 +13,7 @@ from job_tracker.ai import Analyzer
 from job_tracker.credentials import Credentials
 from job_tracker.db import Account, Usage
 from job_tracker.email import connect_gmail, connect_outlook
+from job_tracker.errors import describe_error
 from job_tracker.excel import export_search, import_rows, preview_import
 from job_tracker.services import Tracker
 from job_tracker.worker import BudgetReached, Importer
@@ -35,11 +36,8 @@ class Work(QRunnable):
             self.signals.success.emit(self.action())
         except BudgetReached as error:
             self.signals.failed.emit(str(error))
-        except Exception:
-            self.signals.failed.emit(
-                "Could not complete the operation. Check your configuration, connection, "
-                "file format, and spending limit. No credentials were logged."
-            )
+        except Exception as error:
+            self.signals.failed.emit(describe_error(error))
 
 
 class Bridge(QObject):
@@ -68,6 +66,14 @@ class Bridge(QObject):
         self.timer.setInterval(300000)
         self.timer.timeout.connect(self.poll)
         self.timer.start()
+        self.refresh_timer = QTimer(self)
+        self.refresh_timer.setInterval(2000)
+        self.refresh_timer.timeout.connect(self.refreshWhileBusy)
+        self.refresh_timer.start()
+
+    def refreshWhileBusy(self):
+        if self._busy:
+            self.refresh()
 
     def refresh(self):
         self._searches = self.tracker.searches()
@@ -369,7 +375,8 @@ class Bridge(QObject):
 
     def scanFinished(self, scan):
         self.feedback(
-            f"Scan {scan['state']}. Recorded usage/reservations: ${scan['spent']:.4f} USD."
+            f"Scan {scan['state']}. Recorded usage/reservations: ${scan['spent']:.4f} USD. "
+            + scan.get("error", "")
         )
 
     @Slot()
@@ -424,5 +431,6 @@ class Bridge(QObject):
 
     def stop(self):
         self.timer.stop()
+        self.refresh_timer.stop()
         self.importer.cancelled.set()
         self.pool.waitForDone()

@@ -5,12 +5,14 @@ import math
 from datetime import UTC, datetime, timedelta
 from threading import Event
 
-from sqlalchemy import select
+import httpx
+from sqlalchemy import func, select
 
 from job_tracker.ai import RATES, Analyzer, estimated_cost
-from job_tracker.db import Application, ApplicationEvent, Job, Message, Review, Scan, Usage
+from job_tracker.db import Account, Application, ApplicationEvent, Job, Message, Review, Scan, Usage
 from job_tracker.domain import ApplicationInput, now, timestamp
 from job_tracker.email import Mailbox
+from job_tracker.errors import UserFacingError, blocks_scan, describe_error
 from job_tracker.services import Tracker, record
 
 
@@ -94,7 +96,7 @@ class Importer:
             if account["credential_ref"] and self.vault.get(account["credential_ref"])
         ]
         if not accounts:
-            raise ValueError("Connect a mailbox in Settings first.")
+            raise UserFacingError("Connect a mailbox in Settings first.")
         candidates, uncached, total = {}, 0, 0
         for account in accounts:
             ids = self.mailbox_factory(account, self.vault).list_ids(
@@ -168,20 +170,25 @@ class Importer:
             return usage.id
 
     def stage_message(self, account: dict, provider_id: str, scan_id: int, search_id: int) -> int:
-        with self.tracker.db.sessions() as session:
+        with self.tracker.db.sessions.begin() as session:
             message = session.scalar(
                 select(Message).where(
                     Message.account_id == account["id"], Message.provider_id == provider_id
                 )
             )
-        if message is None:
-            mail = self.mailbox_factory(account, self.vault).get(provider_id)
-            with self.tracker.db.sessions.begin() as session:
-                message = Message(account_id=account["id"], **vars(mail))
+            if message is None:
+                # Persist message identity before downloading: failures stay resumable.
+                message = Message(
+                    account_id=account["id"],
+                    provider_id=provider_id,
+                    sender="",
+                    subject="",
+                    body="",
+                    received_at="",
+                    state="fetch_pending",
+                )
                 session.add(message)
                 session.flush()
-                message_id = message.id
-        else:
             message_id = message.id
         with self.tracker.db.sessions.begin() as session:
             job = session.scalar(
@@ -198,13 +205,31 @@ class Importer:
     def process(self, job_id: int, analyzer):
         with self.tracker.db.sessions.begin() as session:
             job = session.get(Job, job_id)
-            if job.state in ("done", "review") or job.attempts >= 3:
+            if job.state in ("done", "review", "unavailable") or job.attempts >= 3:
                 return
             if job.retry_at and job.retry_at > now():
                 return
             job.attempts += 1
             message = session.get(Message, job.message_id)
             result = json.loads(message.result_json or "{}")
+            account = record(session.get(Account, message.account_id))
+
+        if message.state == "fetch_pending":
+            try:
+                mail = self.mailbox_factory(account, self.vault).get(message.provider_id)
+            except httpx.HTTPStatusError as error:
+                if error.response.status_code != 404:
+                    raise
+                with self.tracker.db.sessions.begin() as session:
+                    session.get(Job, job_id).state = "unavailable"
+                    session.get(Job, job_id).error = describe_error(error)
+                    session.get(Message, message.id).state = "unavailable"
+                return
+            with self.tracker.db.sessions.begin() as session:
+                message = session.get(Message, message.id)
+                for key, value in vars(mail).items():
+                    setattr(message, key, value)
+                message.state = "pending"
 
         def bill(operation, model, amount):
             return self.bill(job.scan_id, message.id, operation, model, amount)
@@ -266,6 +291,7 @@ class Importer:
         with self.tracker.db.sessions.begin() as session:
             scan = session.get(Scan, scan_id)
             scan.state = "running"
+            scan.error = ""
         analyzer = None
         try:
             if self.cancelled.is_set():
@@ -278,13 +304,29 @@ class Importer:
                 for index, provider_id in enumerate(ids):
                     if self.cancelled.is_set():
                         raise BudgetReached("Scan paused; resume to continue.")
-                    progress(f"Reading email {index + 1} of {len(ids)}…")
+                    progress(f"Queuing email {index + 1} of {len(ids)}…")
                     staged.append(
                         self.stage_message(
                             accounts[int(account_id)], provider_id, scan_id, scan.search_id
                         )
                     )
-            # All emails are durable before live-sync checkpoints are allowed to advance.
+            # Already-downloaded emails (including old stalled scans) are processed first.
+            with self.tracker.db.sessions() as session:
+                unfinished = session.scalars(
+                    select(Job.id).where(
+                        Job.scan_id == scan_id, Job.state.in_(["pending", "error"])
+                    )
+                )
+                staged = list(dict.fromkeys([*staged, *unfinished]))
+                saved = set(
+                    session.scalars(
+                        select(Job.id)
+                        .join(Message)
+                        .where(Job.scan_id == scan_id, Message.state != "fetch_pending")
+                    )
+                )
+            staged.sort(key=lambda job_id: job_id not in saved)
+            # Every identity is durable. Only a fully resolved queue advances sync checkpoints.
             for index, job_id in enumerate(staged):
                 if self.cancelled.is_set():
                     raise BudgetReached("Scan paused; resume to continue.")
@@ -295,15 +337,18 @@ class Importer:
                     with self.tracker.db.sessions.begin() as session:
                         session.get(Job, job_id).attempts -= 1
                     raise
-                except Exception:
+                except Exception as error:
                     # Provider exception strings can contain email content or credentials.
                     with self.tracker.db.sessions.begin() as session:
                         job = session.get(Job, job_id)
                         job.state = "error"
-                        job.error = "Processing failed. Check credentials/network, then resume."
+                        job.error = describe_error(error)
+                        session.get(Scan, scan_id).error = job.error
                         job.retry_at = (datetime.now(UTC) + timedelta(minutes=1)).isoformat(
                             timespec="seconds"
                         )
+                    if blocks_scan(error):
+                        break
             with self.tracker.db.sessions.begin() as session:
                 pending = session.scalar(
                     select(Job.id).where(
@@ -311,12 +356,14 @@ class Importer:
                     )
                 )
                 session.get(Scan, scan_id).state = "paused" if pending else "completed"
-        except BudgetReached:
+        except BudgetReached as error:
             with self.tracker.db.sessions.begin() as session:
                 session.get(Scan, scan_id).state = "paused"
-        except Exception:
+                session.get(Scan, scan_id).error = str(error)
+        except Exception as error:
             with self.tracker.db.sessions.begin() as session:
                 session.get(Scan, scan_id).state = "paused"
+                session.get(Scan, scan_id).error = describe_error(error)
             raise
         finally:
             if analyzer:
@@ -326,15 +373,34 @@ class Importer:
 
     def scans(self, search_id: int) -> list[dict]:
         with self.tracker.db.sessions() as session:
-            return [
-                record(row)
-                for row in session.scalars(
+            rows = list(
+                session.scalars(
                     select(Scan)
                     .where(Scan.search_id == search_id)
                     .order_by(Scan.id.desc())
                     .limit(20)
                 )
-            ]
+            )
+            output = []
+            for row in rows:
+                counts = dict(
+                    session.execute(
+                        select(Job.state, func.count(Job.id))
+                        .where(Job.scan_id == row.id)
+                        .group_by(Job.state)
+                    ).all()
+                )
+                output.append(
+                    record(row)
+                    | {
+                        "processed": counts.get("done", 0),
+                        "review_count": counts.get("review", 0),
+                        "failed": counts.get("error", 0),
+                        "pending": counts.get("pending", 0),
+                        "unavailable": counts.get("unavailable", 0),
+                    }
+                )
+            return output
 
     def resume(self, scan_id: int, budget: float):
         if not math.isfinite(budget) or budget <= 0:

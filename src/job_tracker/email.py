@@ -3,6 +3,7 @@
 import base64
 import json
 import re
+import time
 from dataclasses import dataclass
 from html.parser import HTMLParser
 from urllib.parse import quote
@@ -18,10 +19,27 @@ from sqlalchemy import select
 from job_tracker.credentials import Credentials
 from job_tracker.db import Account
 from job_tracker.domain import now, timestamp
+from job_tracker.errors import UserFacingError
 from job_tracker.services import Tracker
 
 GMAIL_SCOPE = "https://www.googleapis.com/auth/gmail.readonly"
 GRAPH_SCOPES = ["https://graph.microsoft.com/Mail.Read", "https://graph.microsoft.com/User.Read"]
+
+
+def read_request(client, url, **kwargs):
+    """Retry only idempotent mailbox reads, never paid AI generation requests."""
+    for attempt in range(3):
+        try:
+            response = client.get(url, **kwargs)
+            response.raise_for_status()
+            return response
+        except httpx.HTTPStatusError as error:
+            if attempt == 2 or error.response.status_code not in (408, 429, 500, 502, 503, 504):
+                raise
+        except httpx.RequestError:
+            if attempt == 2:
+                raise
+        time.sleep(2**attempt)
 
 
 class TextExtractor(HTMLParser):
@@ -159,7 +177,7 @@ class Mailbox:
     def headers(self) -> dict:
         info = json.loads(self.vault.get(self.account["credential_ref"]) or "{}")
         if not info:
-            raise ValueError("Reconnect the mailbox in Settings.")
+            raise UserFacingError("Reconnect the mailbox in Settings.")
         if self.account["provider"] == "gmail":
             credentials = GoogleCredentials.from_authorized_user_info(info, [GMAIL_SCOPE])
             if not credentials.valid:
@@ -179,7 +197,7 @@ class Mailbox:
                 app.acquire_token_silent(GRAPH_SCOPES, account=accounts[0]) if accounts else None
             )
             if not result or "access_token" not in result:
-                raise ValueError("Reconnect your Microsoft mailbox in Settings.")
+                raise UserFacingError("Reconnect your Microsoft mailbox in Settings.")
             if cache.has_state_changed:
                 self.vault.save(
                     self.account["credential_ref"],
@@ -211,8 +229,7 @@ class Mailbox:
                     }
                     if page:
                         params["pageToken"] = page
-                    response = client.get(url, headers=headers, params=params)
-                    response.raise_for_status()
+                    response = read_request(client, url, headers=headers, params=params)
                     data = response.json()
                     ids.extend(row["id"] for row in data.get("messages", []))
                     page = data.get("nextPageToken", "")
@@ -229,13 +246,14 @@ class Mailbox:
                     )
                     if not url.startswith("https://graph.microsoft.com/"):
                         raise ValueError("Invalid mailbox pagination URL.")
-                    response = client.get(url, headers=headers, params=params)
-                    response.raise_for_status()
+                    response = read_request(client, url, headers=headers, params=params)
                     data = response.json()
                     ids.extend(row["id"] for row in data.get("value", []))
                     page = data.get("@odata.nextLink", "")
                 if len(ids) > 50000:
-                    raise ValueError("More than 50,000 emails found. Choose a smaller date range.")
+                    raise UserFacingError(
+                        "More than 50,000 emails found. Choose a smaller date range."
+                    )
                 if not page:
                     return ids
         return ids
@@ -244,29 +262,33 @@ class Mailbox:
         headers = self.headers()
         with httpx.Client(timeout=30) as client:
             if self.account["provider"] == "gmail":
-                response = client.get(
+                response = read_request(
+                    client,
                     "https://gmail.googleapis.com/gmail/v1/users/me/messages/"
                     + quote(provider_id, safe=""),
                     headers=headers,
                     params={"format": "full"},
                 )
-                response.raise_for_status()
                 data = response.json()
-                meta = {row["name"].lower(): row["value"] for row in data["payload"]["headers"]}
+                mime = data.get("payload") or {}
+                meta = {
+                    (row.get("name") or "").lower(): row.get("value") or ""
+                    for row in (mime.get("headers") or [])
+                }
                 plain, html = [], []
 
                 def decode(part):
                     if part.get("filename"):
                         return  # Attachments are never opened or executed.
-                    value = part.get("body", {}).get("data")
+                    value = (part.get("body") or {}).get("data")
                     if value and part.get("mimeType") in ("text/plain", "text/html"):
                         content = base64.urlsafe_b64decode(value + "=" * (-len(value) % 4))
                         target = plain if part["mimeType"] == "text/plain" else html
                         target.append(content.decode("utf-8", errors="replace"))
-                    for nested in part.get("parts", []):
+                    for nested in part.get("parts") or []:
                         decode(nested)
 
-                decode(data["payload"])
+                decode(mime)
                 from datetime import UTC, datetime
 
                 received = datetime.fromtimestamp(int(data["internalDate"]) / 1000, UTC).isoformat()
@@ -278,12 +300,12 @@ class Mailbox:
                     normalize("\n".join(plain or html), html=not plain),
                     timestamp(received),
                 )
-            response = client.get(
+            response = read_request(
+                client,
                 "https://graph.microsoft.com/v1.0/me/messages/" + quote(provider_id, safe=""),
                 headers=headers,
                 params={"$select": "id,conversationId,from,subject,body,receivedDateTime"},
             )
-            response.raise_for_status()
             data = response.json()
             return Email(
                 provider_id,

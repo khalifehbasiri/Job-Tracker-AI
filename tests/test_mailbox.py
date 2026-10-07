@@ -115,3 +115,25 @@ def test_outlook_reads_body_without_writes(monkeypatch):
     assert requests[0].method == "GET"
     assert requests[0].headers["Prefer"] == 'IdType="ImmutableId"'
     assert requests[0].url.raw_path.split(b"?")[0].endswith(b"id%2Fencoded")
+
+
+def test_mailbox_read_retries_transient_error_then_recovers(monkeypatch):
+    attempts = []
+    monkeypatch.setattr("job_tracker.email.time.sleep", lambda _delay: None)
+
+    def handle(request):
+        attempts.append(request)
+        if len(attempts) < 3:
+            return httpx.Response(503, json={"error": {"message": "PRIVATE"}})
+        return httpx.Response(
+            200,
+            json={
+                "internalDate": "1790856000000",
+                "payload": {"headers": [{"name": "Subject", "value": None}], "body": None},
+            },
+        )
+
+    mailbox = adapter(monkeypatch, "gmail", handle)
+    message = mailbox.get("id")
+    assert len(attempts) == 3
+    assert message.subject == "" and message.body == ""

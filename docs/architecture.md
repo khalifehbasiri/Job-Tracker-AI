@@ -16,6 +16,8 @@ Gmail and Outlook use read-only OAuth. Development users configure their own ins
 
 Inbound emails are untrusted data, never instructions. The classifier has no tools or mail mutation privileges. Decisions classifies relevance and event type; a mini model extracts typed fields and evidence. Python validates results, matches application identity, and updates an append-only event history. Manual corrections are preserved. Silence is not rejection; an invitation is not completion.
 
+Scans persist message identities before retrieval and process already-downloaded messages first. Each remaining email is downloaded and classified individually, so a later download failure cannot strand earlier records. Only a fully resolved queue advances live-sync checkpoints. Deleted messages are counted as unavailable. Transient mailbox GET failures have bounded retries; account-wide mailbox/API failures pause processing rather than repeating failures across the entire scan. Safe diagnostics and queue counts remain visible in history, and the dashboard refreshes during processing.
+
 ## Historical import and spending
 
 Import from email history supports 1, 3, 6, and 12 months plus custom dates, selecting UTC calendar days. Count unprocessed messages, show illustrative token-based cost scenarios, then request a user-selected budget and explicit start. Persist scan state and usage; allow cancellation and resuming. Deduplicate message IDs within each account and reuse results across overlapping imports. Reserve conservative per-request costs before sending requests and stop before the budget is exhausted. Estimates are not provider billing statements.

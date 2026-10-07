@@ -8,6 +8,7 @@ from PySide6.QtQuick import QQuickWindow
 from PySide6.QtQuickControls2 import QQuickStyle
 
 from job_tracker.credentials import Credentials
+from job_tracker.db import Scan
 from job_tracker.desktop_lock import acquire_database_lock
 from job_tracker.ui.bridge import Bridge
 
@@ -15,6 +16,17 @@ from job_tracker.ui.bridge import Bridge
 def test_qml_pages_and_live_records(qapp, qtbot, tracker):
     QQuickStyle.setStyle("Basic")
     search = tracker.create_search("Test search")
+    with tracker.db.sessions.begin() as session:
+        session.add(
+            Scan(
+                search_id=search,
+                start_at="2026-09-01T00:00:00Z",
+                end_at="2026-10-01T00:00:00Z",
+                budget=1,
+                state="paused",
+                error="Mailbox request timed out. Resume to retry.",
+            )
+        )
     vault = Credentials()
     # Test machines must never query a user's existing credential store.
     vault.get = lambda name: ""
@@ -79,4 +91,19 @@ def test_failed_key_save_does_not_report_success(qapp, tracker, monkeypatch):
     bridge = Bridge(tracker, vault)
     bridge.saveKey("replacement-key", True)
     assert "Could not save the key securely" in bridge.message
+    bridge.stop()
+
+
+def test_records_refresh_during_background_scan(qapp, qtbot, tracker):
+    vault = Credentials()
+    vault.get = lambda name: ""
+    bridge = Bridge(tracker, vault)
+    bridge.timer.stop()
+    bridge._busy = True
+    tracker.save_application(bridge.selectedSearch, {"company": "New record", "role": "Engineer"})
+    assert not bridge.applications
+    bridge.refresh_timer.setInterval(10)
+    qtbot.waitUntil(lambda: bool(bridge.applications), timeout=2000)
+    assert bridge.applications[0]["company"] == "New record"
+    bridge._busy = False
     bridge.stop()
