@@ -90,6 +90,31 @@ def test_scan_deduplicates_and_reuses_ai(importer, tracker):
     assert len(tracker.events(tracker.applications(search)[0]["id"])) == 1
 
 
+def test_conflicting_requisition_does_not_match_same_company_role(tracker):
+    search = tracker.create_search("2026")
+    tracker.save_application(
+        search, {"company": "Company", "role": "Developer", "requisition_id": "OLD"}
+    )
+    with tracker.db.sessions() as session:
+        message = Message(
+            account_id=1,
+            provider_id="new",
+            thread_id="",
+            sender="",
+            subject="",
+            body="",
+            received_at="2026-10-01T00:00:00Z",
+        )
+        app, reason = match_application(
+            session,
+            message,
+            {"company": "Company", "role": "Developer", "requisition_id": "NEW"},
+            search,
+        )
+        assert app is None
+        assert "conflicts" in reason
+
+
 def test_budget_stops_before_request_and_scan_resumes(importer, tracker):
     search = tracker.create_search("2026")
     plan = importer.preview("2026-09-01T00:00:00Z", "2026-11-01T00:00:00Z")

@@ -4,15 +4,17 @@ import argparse
 import sys
 from pathlib import Path
 
+from platformdirs import user_data_path
 from PySide6.QtCore import QTimer, QUrl
 from PySide6.QtGui import QAction, QColor, QFontDatabase, QIcon, QPainter, QPixmap
 from PySide6.QtQml import QQmlApplicationEngine
 from PySide6.QtQuick import QQuickWindow
 from PySide6.QtQuickControls2 import QQuickStyle
-from PySide6.QtWidgets import QApplication, QMenu, QSystemTrayIcon
+from PySide6.QtWidgets import QApplication, QMenu, QMessageBox, QSystemTrayIcon
 
 from job_tracker.credentials import Credentials
 from job_tracker.db import Database
+from job_tracker.desktop_lock import acquire_database_lock
 from job_tracker.services import Tracker
 from job_tracker.ui.bridge import Bridge
 
@@ -37,9 +39,18 @@ def main():
     app.setApplicationName("JobTrackerAI")
     app.setOrganizationName("JobTrackerAI")
     if args.demo and args.database is None:
-        from platformdirs import user_data_path
-
         args.database = user_data_path("JobTrackerAI", appauthor=False) / "demo.sqlite3"
+    args.database = (
+        args.database or user_data_path("JobTrackerAI", appauthor=False) / "tracker.sqlite3"
+    )
+    try:
+        database_lock = acquire_database_lock(args.database)
+    except ValueError as error:
+        if args.screenshot:
+            print(str(error), file=sys.stderr)
+        else:
+            QMessageBox.information(None, "Job Tracker is already running", str(error))
+        return 1
     db = Database(args.database)
     tracker = Tracker(db)
     if args.demo and not tracker.searches():
@@ -117,6 +128,7 @@ def main():
     engine.deleteLater()
     app.processEvents()
     db.close()
+    database_lock.unlock()
     return result
 
 

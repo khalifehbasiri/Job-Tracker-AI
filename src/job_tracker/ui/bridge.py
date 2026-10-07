@@ -123,6 +123,7 @@ class Bridge(QObject):
         try:
             action()
             self.refresh()
+            return True
         except ValueError:
             self.feedback(
                 "Check the required fields, date format (YYYY-MM-DD), and selected record."
@@ -248,9 +249,14 @@ class Bridge(QObject):
 
     @Slot(str, bool)
     def saveKey(self, value, persist):
-        self.local(lambda: self.vault.save("openai", value, persist))
-        if self.vault.get("openai"):
+        if self._busy:
+            return
+        if self.local(lambda: self.vault.save("openai", value, persist)):
             self.feedback("API key configured. AI requests use your OpenAI account.")
+        else:
+            self.feedback(
+                "Could not save the key securely. Try Session only if OS storage is unavailable."
+            )
 
     @Slot()
     def removeKey(self):

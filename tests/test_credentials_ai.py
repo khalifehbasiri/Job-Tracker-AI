@@ -44,6 +44,24 @@ def test_no_plaintext_fallback(monkeypatch):
     assert not vault.memory
 
 
+def test_session_key_replaces_previous_saved_key(monkeypatch):
+    vault = Credentials()
+    backend = MemoryBackend()
+    monkeypatch.setattr(vault, "backend", lambda: backend)
+    vault.save("openai", "old-persistent-key")
+    vault.save("openai", "new-session-key", persist=False)
+    assert backend.values == {}
+    assert vault.get("openai") == "new-session-key"
+
+
+def test_remove_session_key_without_os_storage(monkeypatch):
+    vault = Credentials()
+    monkeypatch.setattr(vault, "backend", lambda: (_ for _ in ()).throw(ValueError("unavailable")))
+    vault.save("openai", "session-key", persist=False)
+    vault.remove("openai")
+    assert not vault.memory
+
+
 def test_extraction_has_no_tools_and_rejects_unsupported_evidence():
     calls, charges = [], []
 

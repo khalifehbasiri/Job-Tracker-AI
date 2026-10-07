@@ -66,6 +66,12 @@ def match_application(session, message: Message, extraction: dict, search_id: in
         and app.role.casefold() == role
     ]
     if len(matches) == 1:
+        if (
+            requisition
+            and matches[0].requisition_id
+            and (matches[0].requisition_id.casefold() != requisition)
+        ):
+            return None, "The requisition ID conflicts with the matching company and role."
         return matches[0], ""
     return None, "Multiple roles match this email." if matches else "No exact application match."
 

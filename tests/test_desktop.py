@@ -1,12 +1,14 @@
 import json
 from pathlib import Path
 
+import pytest
 from PySide6.QtCore import QThread, QUrl
 from PySide6.QtQml import QQmlApplicationEngine
 from PySide6.QtQuick import QQuickWindow
 from PySide6.QtQuickControls2 import QQuickStyle
 
 from job_tracker.credentials import Credentials
+from job_tracker.desktop_lock import acquire_database_lock
 from job_tracker.ui.bridge import Bridge
 
 
@@ -53,4 +55,28 @@ def test_background_completion_runs_on_ui_thread(qapp, qtbot, tracker):
     qtbot.waitUntil(lambda: bool(completed), timeout=3000)
     assert completed[0] == ("done", qapp.thread())
     assert not bridge.busy
+    bridge.stop()
+
+
+def test_single_instance_per_database(qapp, tmp_path):
+    path = tmp_path / "records.sqlite3"
+    first = acquire_database_lock(path)
+    try:
+        with pytest.raises(ValueError, match="already open"):
+            acquire_database_lock(path)
+    finally:
+        first.unlock()
+    replacement = acquire_database_lock(path)
+    replacement.unlock()
+
+
+def test_failed_key_save_does_not_report_success(qapp, tracker, monkeypatch):
+    vault = Credentials()
+    vault.get = lambda name: "old-key"
+    monkeypatch.setattr(
+        vault, "save", lambda *args: (_ for _ in ()).throw(ValueError("Cannot save securely"))
+    )
+    bridge = Bridge(tracker, vault)
+    bridge.saveKey("replacement-key", True)
+    assert "Could not save the key securely" in bridge.message
     bridge.stop()
