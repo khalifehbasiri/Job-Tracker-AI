@@ -156,7 +156,7 @@ flowchart LR
 
 ## Run on Windows
 
-**v0.2.1 · Self-configured edition** — Windows x64, with user-owned email OAuth and OpenAI credentials.
+**v0.2.2 · Self-configured edition** — Windows x64, with user-owned email OAuth and OpenAI credentials.
 
 - [Download the Windows installer](https://github.com/khalifehbasiri/Job-Tracker-AI/releases/latest/download/Job-Tracker-AI-Setup.exe).
 - [Download the portable ZIP](https://github.com/khalifehbasiri/Job-Tracker-AI/releases/latest/download/Job-Tracker-AI-Windows-x64.zip).
@@ -250,6 +250,7 @@ Release builds fail on unreviewed Qt runtime modules or missing library license 
 | Automatic processing idle | Enabled setting applied, connected selected source, key present, unarchived search, budgets available, and no visible unfinished import waiting for attention. |
 | Excel changes missing in a new export | Exports are snapshots. Edit the record in the app; duplicate imports do not overwrite it. |
 | Source changes not visible | Close the existing app window (or use Quit in the tray menu for older versions) and start the updated app. |
+| Records or accounts appear after reinstalling | Reinstallation preserves your Windows user's existing app database and credentials. Source and installed builds share that local state. Public downloads contain no database, mailbox tokens, or API keys; a new Windows user starts with no applications or connected mailboxes. |
 
 ## License
 

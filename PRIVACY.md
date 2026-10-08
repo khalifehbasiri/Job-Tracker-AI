@@ -6,6 +6,14 @@ Job Tracker AI has no developer-operated server, telemetry, advertising, or clou
 
 SQLite stores searches, applications, event history, tasks, mailbox addresses, provider message IDs, normalized sender/subject/body text, AI results, review items, scan checkpoints, and a usage ledger. The database lives in the OS application-data directory by default. Settings displays its location. It is not encrypted by this application.
 
+Public downloads do not contain a database, application records, connected mailboxes,
+API keys, or OAuth client JSON. A normal first launch creates an empty search and
+opens setup. Demonstration records are created only with the explicit `--demo`
+command-line option; README screenshots use fictional data. Source and installed
+builds use the same local data directory and credential service for a given OS
+user. Installing an update or reinstalling therefore preserves that user's
+previous records and connections; those records did not arrive in the download.
+
 API keys and OAuth token caches are stored separately in a supported OS credential store. Session-only credentials remain in process memory. Replacing a saved API key with a session-only key removes the previous saved key when secure storage is available. Credentials are excluded from database backups and workbook exports. This development preview requires user-owned OAuth registrations and does not bundle project-owned registrations. Original Google JSON stays outside the repository; imported Google configuration uses the credential store or session memory. Microsoft client IDs are public registration identifiers saved in local settings.
 
 Large credentials may occupy several encrypted entries in the OS credential store to fit its size limits. Their small manifest contains only assembly metadata, and all pieces remain in the credential store. Disconnecting removes the associated manifest and pieces. The app does not fall back to plaintext token files.

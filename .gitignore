@@ -18,6 +18,8 @@ dist/
 credentials.json
 token.json
 src/job_tracker/google_desktop_oauth.json
+*oauth*client*.json
+private/
 *.log
 .coverage
 htmlcov/

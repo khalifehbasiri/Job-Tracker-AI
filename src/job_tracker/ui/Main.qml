@@ -495,7 +495,7 @@ ApplicationWindow {
                                     ActionButton { text: "Export this search"; enabled: !backend.busy; onClicked: backend.exportExcel() }
                                     ActionButton { text: root.search.archived ? "Unarchive search" : "Archive search"; enabled: !backend.busy; onClicked: backend.archiveSearch(!root.search.archived) }
                                 }
-                                PlainLabel { text: "Exports and backups exclude API keys. Keep database backups private: they include saved email text.\nClosing the window quits the app and stops automatic processing. Minimize the window to keep it running."; wrapMode: Text.WordWrap; color: Theme.muted; Layout.fillWidth: true }
+                                PlainLabel { text: "Records and credentials belong to this computer's user; reinstalling preserves them. Downloads contain no saved records or accounts.\nExports and backups exclude API keys. Keep database backups private: they include saved email text.\nClosing the window quits the app and stops automatic processing. Minimize the window to keep it running."; wrapMode: Text.WordWrap; color: Theme.muted; Layout.fillWidth: true }
                             }
                         }
                         Card {

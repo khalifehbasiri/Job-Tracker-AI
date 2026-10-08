@@ -12,6 +12,8 @@ import sys
 import tomllib
 from pathlib import Path
 
+from release_privacy import assert_no_private_data
+
 ROOT = Path(__file__).resolve().parents[1]
 
 
@@ -56,6 +58,39 @@ def smoke(bundle):
     # Fictional demo records, no user database or provider network calls.
     artifacts = ROOT / "artifacts/frozen-smoke"
     artifacts.mkdir(parents=True, exist_ok=True)
+    # Normal first launch must create empty records, unlike explicit --demo mode.
+    fresh_database = artifacts / "fresh.sqlite3"
+    for suffix in ("", "-wal", "-shm"):
+        Path(str(fresh_database) + suffix).unlink(missing_ok=True)
+    fresh_screenshot = artifacts / "fresh.png"
+    fresh_screenshot.unlink(missing_ok=True)
+    subprocess.run(
+        [
+            str(bundle / "Job-Tracker-AI.exe"),
+            "--database",
+            str(fresh_database),
+            "--screenshot",
+            str(fresh_screenshot),
+        ],
+        cwd=artifacts,
+        timeout=60,
+        check=True,
+        env=os.environ | {"QT_QUICK_BACKEND": "software"},
+    )
+    assert fresh_screenshot.exists() and fresh_screenshot.stat().st_size > 1000
+    with sqlite3.connect(fresh_database) as connection:
+        for table in (
+            "applications",
+            "email_accounts",
+            "email_messages",
+            "application_events",
+            "tasks",
+            "history_scan_runs",
+            "processing_jobs",
+            "ai_usage",
+        ):
+            assert connection.execute(f"SELECT count(*) FROM {table}").fetchone()[0] == 0
+        assert connection.execute("SELECT count(*) FROM job_searches").fetchone()[0] == 1
     database, screenshot = artifacts / "demo.sqlite3", artifacts / "dashboard.png"
     screenshot.unlink(missing_ok=True)
     screenshot.with_suffix(".error.txt").unlink(missing_ok=True)
@@ -152,6 +187,7 @@ def main():
         tag = os.environ["GITHUB_REF_NAME"]
         if tag != f"v{version}" and not tag.startswith(f"v{version}-"):
             raise SystemExit("Release tag must match the version in pyproject.toml.")
+    assert_no_private_data(ROOT / "src/job_tracker")
     run(sys.executable, "scripts/build_help.py")
     run(sys.executable, "scripts/prepare_dependency_sources.py")
     dependency_notices()
@@ -180,6 +216,7 @@ def main():
     for filename in ("README.md", "PRIVACY.md", "LICENSE"):
         shutil.copyfile(ROOT / filename, bundle / filename)
     shutil.copytree(ROOT / "src/job_tracker/help", bundle / "Setup guide", dirs_exist_ok=True)
+    assert_no_private_data(bundle)
     release = ROOT / "dist/release"
     release.mkdir(parents=True, exist_ok=True)
     shutil.make_archive(
