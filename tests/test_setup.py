@@ -3,6 +3,7 @@ import json
 import pytest
 
 from job_tracker.credentials import Credentials
+from job_tracker.db import Account
 from job_tracker.email import register
 from job_tracker.errors import UserFacingError
 from job_tracker.ui.bridge import Bridge
@@ -78,4 +79,32 @@ def test_provider_change_invalidates_preview_but_not_records(qapp, tracker):
     bridge.selectProvider("gmail")
     assert bridge.selectedProvider == "outlook"
     bridge._busy = False
+    bridge.stop()
+
+
+def test_automatic_poll_only_advances_selected_provider_checkpoint(qapp, tracker):
+    vault = session_vault()
+    vault.save("openai", "synthetic-key", False)
+    for provider in ("gmail", "outlook"):
+        vault.save(provider, "synthetic-token", False)
+        register(tracker, provider, provider + "@example.org", provider)
+    with tracker.db.sessions.begin() as session:
+        session.get(Account, 1).last_sync = "2026-01-01T00:00:00+00:00"
+        session.get(Account, 2).last_sync = "2026-02-01T00:00:00+00:00"
+    bridge = Bridge(tracker, vault)
+    bridge.selectProvider("outlook")
+    bridge.configureAI(True, "0.25", "1")
+    calls = []
+    bridge.importer.preview = lambda start, end, provider: (
+        calls.append((start, end, provider)) or {}
+    )
+    bridge.importer.create_scan = lambda *_args: 0
+    bridge.importer.run = lambda *_args: {"state": "completed", "spent": 0}
+    bridge.background = lambda action, complete, **_kwargs: complete(action())
+    bridge.poll()
+    assert calls[0][0] == "2026-01-31T23:55:00+00:00"
+    assert calls[0][2] == "outlook"
+    accounts = tracker.accounts()
+    assert accounts[0]["last_sync"] == "2026-01-01T00:00:00+00:00"
+    assert accounts[1]["last_sync"] == calls[0][1]
     bridge.stop()

@@ -42,6 +42,8 @@ def smoke(bundle):
     artifacts = ROOT / "artifacts/frozen-smoke"
     artifacts.mkdir(parents=True, exist_ok=True)
     database, screenshot = artifacts / "demo.sqlite3", artifacts / "dashboard.png"
+    screenshot.unlink(missing_ok=True)
+    screenshot.with_suffix(".error.txt").unlink(missing_ok=True)
     result = subprocess.run(
         [
             str(bundle / "Job-Tracker-AI.exe"),
@@ -56,7 +58,7 @@ def smoke(bundle):
         env=os.environ | {"QT_QUICK_BACKEND": "software"},
     )
     if result.returncode or not screenshot.exists() or screenshot.stat().st_size < 1000:
-        raise RuntimeError("Packaged dashboard smoke test failed.")
+        raise RuntimeError(f"Packaged dashboard smoke test failed (exit code {result.returncode}).")
     with sqlite3.connect(database) as connection:
         assert connection.execute("SELECT count(*) FROM applications").fetchone()[0] == 5
         assert connection.execute("SELECT count(*) FROM email_accounts").fetchone()[0] == 0
@@ -80,7 +82,26 @@ def main():
             raise SystemExit("Release tag must match the version in pyproject.toml.")
     run(sys.executable, "scripts/build_help.py")
     dependency_notices()
-    run(sys.executable, "-m", "PyInstaller", "--noconfirm", "packaging/windows.spec")
+    # Other desktop tools may put incompatible DLLs (for example Poppler's ICU)
+    # on PATH. Qt uses Windows' ICU; dependency discovery must prefer System32.
+    system = Path(os.environ["SystemRoot"])
+    build_env = os.environ | {
+        "PATH": os.pathsep.join(
+            str(path)
+            for path in (
+                system / "System32",
+                system,
+                Path(sys.base_prefix),
+                Path(sys.executable).parent,
+            )
+        )
+    }
+    subprocess.run(
+        [sys.executable, "-m", "PyInstaller", "--clean", "--noconfirm", "packaging/windows.spec"],
+        cwd=ROOT,
+        check=True,
+        env=build_env,
+    )
     bundle = ROOT / "dist/Job-Tracker-AI"
     smoke(bundle)
     for filename in ("README.md", "PRIVACY.md", "LICENSE"):
