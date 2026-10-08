@@ -1,14 +1,28 @@
-<!doctype html><html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Job Tracker AI setup</title><style>body{font:16px/1.65 system-ui,sans-serif;max-width:900px;margin:40px auto;padding:0 24px;background:#f4f6f1;color:#20362e}a{color:#216e62}code{overflow-wrap:anywhere}li{margin:8px 0}h2{margin-top:40px}</style><main><h1>Development preview: complete setup guide</h1>
-<p>Email onboarding is still in development. <strong>This release requires your own OpenAI API key and your own email OAuth registration.</strong> No shared project credentials are included. Manual tracking and Excel import/export need no credentials. An email password, Microsoft client ID, and OpenAI API key are different things.</p>
-<p>This guide is also available offline from Settings and the welcome wizard. Provider consoles can change labels; official references are linked below.</p>
-<h2>1. Start the app</h2>
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Job Tracker AI setup</title><style>:root{color-scheme:light dark;--bg:#f4f6f1;--fg:#20362e;--link:#216e62}body{font:16px/1.65 system-ui,sans-serif;max-width:900px;margin:40px auto;padding:0 24px;background:var(--bg);color:var(--fg)}a{color:var(--link)}pre{white-space:pre-wrap}code{overflow-wrap:anywhere}li{margin:8px 0}h2{margin-top:40px;scroll-margin-top:24px}nav{margin-bottom:24px}@media(prefers-color-scheme:dark){:root{--bg:#12201d;--fg:#e3ece6;--link:#91d1bd}}@media print{body{margin:0;background:white;color:black}nav{display:none}}</style></head><body><nav aria-label="Project links"><a href="https://github.com/khalifehbasiri/Job-Tracker-AI">Project &amp; downloads</a> · <a href="https://github.com/khalifehbasiri/Job-Tracker-AI/blob/main/PRIVACY.md">Privacy</a></nav><main><h1 id="job-tracker-ai-complete-setup-guide">Job Tracker AI: complete setup guide</h1>
+<p><strong>This release supports user-owned email OAuth registrations and your own OpenAI API key.</strong> No shared project credentials are included. Manual tracking and Excel import/export need no credentials. An email password, Microsoft client ID, and OpenAI API key are different things. Shared one-click OAuth onboarding is not part of this release. The Decisions API used for classification is currently a provider public-beta dependency; access must be available to your OpenAI project.</p>
+<p>Open this guide from <strong>Help &amp; setup guide</strong> in the app's sidebar, press <strong>F1</strong>, or use the guide buttons in Settings and the welcome wizard. The installer also creates a <strong>Job Tracker AI setup guide</strong> Start menu shortcut. Portable users can open <strong>Setup guide/setup.html</strong> from the extracted folder. The guide is included with the download and works offline; provider registration and sign-in require an internet connection. You do not need the developer's local file path. Provider consoles can change labels; official references are linked below.</p>
+<div class="toc">
+<ul>
+<li><a href="#job-tracker-ai-complete-setup-guide">Job Tracker AI: complete setup guide</a><ul>
+<li><a href="#1-start-the-app">1. Start the app</a></li>
+<li><a href="#2-create-your-openai-api-key">2. Create your OpenAI API key</a></li>
+<li><a href="#3a-set-up-gmail">3A. Set up Gmail</a></li>
+<li><a href="#3b-set-up-outlookmicrosoft-365">3B. Set up Outlook/Microsoft 365</a></li>
+<li><a href="#4-select-a-provider-and-import">4. Select a provider and import</a></li>
+<li><a href="#5-troubleshooting-and-removing-access">5. Troubleshooting and removing access</a></li>
+<li><a href="#local-storage-and-known-limitations">Local storage and known limitations</a></li>
+</ul>
+</li>
+</ul>
+</div>
+<h2 id="1-start-the-app">1. Start the app</h2>
 <ol>
 <li>Unzip the entire portable download, then run <code>Job-Tracker-AI.exe</code>. Keep it alongside <code>_internal</code>. Alternatively, run the Windows installer. Source users should follow the README.</li>
 <li>In the first-run wizard, name your search (for example <code>2026 Co-op</code>) and click Next. Create additional searches later using New search.</li>
 <li>Choose Gmail or Outlook. You only need to register the provider you plan to use.</li>
 <li>Next can skip email/AI steps. Set up later opens manual tracking. Reopen the wizard from Settings.</li>
 </ol>
-<h2>2. Create your OpenAI API key</h2>
+<h2 id="2-create-your-openai-api-key">2. Create your OpenAI API key</h2>
 <ol>
 <li>Sign in or create an account at <a href="https://platform.openai.com/">OpenAI Platform</a>.</li>
 <li>Select your organization and a project. A dedicated project helps attribute this app's usage.</li>
@@ -21,7 +35,7 @@
 </ol>
 <p>References: <a href="https://developers.openai.com/api/docs/quickstart">OpenAI quickstart</a>, <a href="https://developers.openai.com/api/docs/guides/production-best-practices">project administration</a>.</p>
 <p>This preview uses GPT-6 Luna through Decisions and GPT-5.4 mini for extraction. Availability depends on your project. There is no silent model substitution. The separate paid fictional-email test from the roadmap is not implemented yet.</p>
-<h2>3A. Set up Gmail</h2>
+<h2 id="3a-set-up-gmail">3A. Set up Gmail</h2>
 <ol>
 <li>Open <a href="https://console.cloud.google.com/">Google Cloud Console</a> using the Google account that will own the registration.</li>
 <li>Project selector → New project. Name it <code>Job Tracker AI Personal</code>, create it, and select it.</li>
@@ -39,7 +53,7 @@
 </ol>
 <p>Desktop sign-in uses PKCE and a random-port loopback callback; no hosted callback website is needed for this Desktop registration. Keep the downloaded file outside Git. Desktop registration metadata cannot act as a confidential backend secret; user tokens and API keys must remain private. <a href="https://developers.google.com/identity/protocols/oauth2/native-app">Desktop OAuth</a></p>
 <p>Testing restricts users and can cause authorization expiry, requiring reconnection. Your own registration is not a blanket exemption from Google's policies. Public restricted-scope access and sending Gmail text to OpenAI can require verification and security assessment. This preview does not claim production approval. <a href="https://developers.google.com/identity/protocols/oauth2/production-readiness/restricted-scope-verification">Google requirements</a></p>
-<h2>3B. Set up Outlook/Microsoft 365</h2>
+<h2 id="3b-set-up-outlookmicrosoft-365">3B. Set up Outlook/Microsoft 365</h2>
 <ol>
 <li>Sign in at <a href="https://entra.microsoft.com/">Microsoft Entra admin center</a> and select your directory. You need an Entra tenant and app-registration permission. If unavailable, follow Microsoft's prerequisites or ask your organization administrator.</li>
 <li>Entra ID → App registrations → New registration. Name it <code>Job Tracker AI Personal</code>.</li>
@@ -56,7 +70,7 @@
 <li>Return to the app and wait for the connected address. If secure storage fails, try Session only. Successful browser authentication can still be followed by failed mailbox access or storage.</li>
 </ol>
 <p>Microsoft has no Google-style Testing/Production switch. Work/school organizations can restrict consent to unverified publishers; personal Outlook success does not guarantee workplace access. <a href="https://learn.microsoft.com/en-us/entra/identity-platform/publisher-verification-overview">Publisher verification</a></p>
-<h2>4. Select a provider and import</h2>
+<h2 id="4-select-a-provider-and-import">4. Select a provider and import</h2>
 <ol>
 <li>In Settings or Email history, choose Gmail, Outlook, or All mailboxes. The choice persists and controls new history previews and automatic processing. Other accounts remain saved; existing job records remain visible.</li>
 <li>Select the target job search. Connecting email alone makes no AI requests.</li>
@@ -70,7 +84,7 @@
 <p>For an older clear rejection already awaiting review with “No exact application match,” preview/start the same date range again. The app can apply the improved rule using saved classification/extraction and supported evidence without another AI call for that email. Matching is checked again; uncertain or now-ambiguous results remain in review. Other uncached emails in the range can still use API credits, so inspect the preview estimate.</p>
 <p>Settings → Current job search → Edit search changes its name, dates, or archive state without moving records. Search dates are labels, not scan boundaries. Settings → Appearance saves a light/dark preference. Information indicators provide hover help; click the one beside AI/email setup for a short summary and guide links.</p>
 <p>Remove in Import history hides an entry while retaining applications, reviews, saved emails, and usage history. Pause a running import first. Removed imports cannot resume; new scans can reuse cached results. Completed imports have no Resume button. Excel Stage/Outcome/Completed dropdowns edit only the exported snapshot; duplicate imports do not overwrite existing app records.</p>
-<h2>5. Troubleshooting and removing access</h2>
+<h2 id="5-troubleshooting-and-removing-access">5. Troubleshooting and removing access</h2>
 <ul>
 <li>Google blocked: check your project, test-user address, Gmail API, Desktop client type, and read-only scope. A different project's JSON may not permit your account.</li>
 <li>Outlook unauthorized_client: check Application client ID and personal-account support. Admin approval required: contact the mailbox's administrator.</li>
@@ -81,6 +95,6 @@
 <li>Remove the OpenAI key using Remove in Settings, and revoke it in OpenAI Platform if necessary.</li>
 <li>Closing the window can keep the worker in the tray. Quit from the tray stops processing and discards session-only credentials.</li>
 </ul>
-<h2>Local storage and known limitations</h2>
+<h2 id="local-storage-and-known-limitations">Local storage and known limitations</h2>
 <p>SQLite contains normalized email text and job history and is not encrypted by the app. Its path is shown in Settings, outside the installation directory. Keep backups private. Uninstall preserves the database and OS credentials; removing the program is not erasing your data.</p>
-<p>Full account-history erasure/retention controls, signed releases, broad real-account validation, and project-owned public OAuth onboarding remain in development. Using your own OAuth registration does not waive provider policies. See PRIVACY.md and the release checklist in the repository.</p></main></html>
+<p>Full account-history erasure/retention controls, signed releases, broad real-account validation, and project-owned public OAuth onboarding remain in development. Using your own OAuth registration does not waive provider policies. See PRIVACY.md and the release checklist in the repository.</p></main></body></html>

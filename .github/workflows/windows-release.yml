@@ -2,6 +2,11 @@ name: Windows release build
 
 on:
   workflow_dispatch:
+    inputs:
+      create_release:
+        description: 'Create a draft release for the current version after validation'
+        type: boolean
+        default: false
   push:
     tags: ['v*']
 
@@ -60,7 +65,7 @@ jobs:
             artifacts/installer-smoke/*.log
 
   draft-release:
-    if: startsWith(github.ref, 'refs/tags/v')
+    if: startsWith(github.ref, 'refs/tags/v') || inputs.create_release
     needs: build
     runs-on: windows-latest
     permissions:
@@ -74,9 +79,15 @@ jobs:
       - name: Create a draft self-configured release for review
         env:
           GH_TOKEN: ${{ github.token }}
-          RELEASE_TAG: ${{ github.ref_name }}
+          RELEASE_REF: ${{ github.ref }}
+          RELEASE_REF_NAME: ${{ github.ref_name }}
+          RELEASE_COMMIT: ${{ github.sha }}
         shell: pwsh
         run: |
           $files = Get-ChildItem -LiteralPath downloads -File | ForEach-Object FullName
-          gh release create $env:RELEASE_TAG @files --verify-tag --draft --title "Job Tracker AI $env:RELEASE_TAG — self-configured edition" --notes-file docs/preview-release-notes.md
+          $version = [regex]::Match((Get-Content -LiteralPath pyproject.toml -Raw), '(?m)^version = "([^"]+)"').Groups[1].Value
+          if (-not $version) { throw 'Missing project version' }
+          $releaseTag = "v$version"
+          if ($env:RELEASE_REF.StartsWith('refs/tags/') -and $env:RELEASE_REF_NAME -ne $releaseTag) { throw 'Tag does not match project version' }
+          gh release create $releaseTag @files --target $env:RELEASE_COMMIT --draft --title "Job Tracker AI $releaseTag — self-configured edition" --notes-file docs/preview-release-notes.md
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
