@@ -1,5 +1,5 @@
 #ifndef AppVersion
-  #define AppVersion "0.1.0"
+  #define AppVersion "0.2.0"
 #endif
 
 [Setup]
@@ -36,6 +36,7 @@ Source: "..\dist\Job-Tracker-AI\*"; DestDir: "{app}"; Flags: ignoreversion recur
 
 [Icons]
 Name: "{group}\Job Tracker AI"; Filename: "{app}\Job-Tracker-AI.exe"
+Name: "{group}\Job Tracker AI setup guide"; Filename: "{app}\Setup guide\setup.html"
 Name: "{autodesktop}\Job Tracker AI"; Filename: "{app}\Job-Tracker-AI.exe"; Tasks: desktopicon
 
 [Run]

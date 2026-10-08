@@ -10,6 +10,7 @@ from PySide6.QtCore import Property, QObject, QRunnable, Qt, QThreadPool, QTimer
 from PySide6.QtWidgets import QFileDialog
 from sqlalchemy import select
 
+from job_tracker import __version__
 from job_tracker.ai import Analyzer
 from job_tracker.credentials import Credentials
 from job_tracker.db import Account, Search, Usage
@@ -263,7 +264,11 @@ class Bridge(QObject):
     )
     trayAvailable = Property(bool, lambda self: self._tray, notify=changed)
     dataPath = Property(str, lambda self: str(self.tracker.db.path), constant=True)
+    appVersion = Property(str, lambda self: __version__, constant=True)
     privacyUrl = Property(str, lambda self: PRIVACY_URL, constant=True)
+    licenseUrl = Property(
+        str, lambda self: HOMEPAGE + "/blob/main/packaging/third-party-notices.md", constant=True
+    )
     setupGuideUrl = Property(
         str, lambda self: HOMEPAGE + "/blob/main/docs/mailbox-setup.md", constant=True
     )
@@ -323,12 +328,24 @@ class Bridge(QObject):
 
         return bool(self.local(save))
 
-    @Slot()
+    @Slot(result=bool)
     def openSetupGuide(self):
         from PySide6.QtGui import QDesktopServices
 
         guide = Path(__file__).parents[1] / "help" / "setup.html"
-        QDesktopServices.openUrl(QUrl.fromLocalFile(str(guide)))
+        if not guide.is_file():
+            self.feedback(
+                "The offline setup guide is missing. Reinstall the app or read the guide "
+                "on GitHub from Settings."
+            )
+            return False
+        if not QDesktopServices.openUrl(QUrl.fromLocalFile(str(guide))):
+            self.feedback(
+                "Could not open your browser. Open setup.html in the installed Setup guide "
+                "folder, or read the guide on GitHub from Settings."
+            )
+            return False
+        return True
 
     @Slot(str, result=str)
     def mailboxStatus(self, provider):

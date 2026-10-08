@@ -1,8 +1,10 @@
-# Development preview: complete setup guide
+# Job Tracker AI: complete setup guide
 
-Email onboarding is still in development. **This release requires your own OpenAI API key and your own email OAuth registration.** No shared project credentials are included. Manual tracking and Excel import/export need no credentials. An email password, Microsoft client ID, and OpenAI API key are different things.
+**This release supports user-owned email OAuth registrations and your own OpenAI API key.** No shared project credentials are included. Manual tracking and Excel import/export need no credentials. An email password, Microsoft client ID, and OpenAI API key are different things. Shared one-click OAuth onboarding is not part of this release. The Decisions API used for classification is currently a provider public-beta dependency; access must be available to your OpenAI project.
 
-This guide is also available offline from Settings and the welcome wizard. Provider consoles can change labels; official references are linked below.
+Open this guide from **Help & setup guide** in the app's sidebar, press **F1**, or use the guide buttons in Settings and the welcome wizard. The installer also creates a **Job Tracker AI setup guide** Start menu shortcut. Portable users can open **Setup guide/setup.html** from the extracted folder. The guide is included with the download and works offline; provider registration and sign-in require an internet connection. You do not need the developer's local file path. Provider consoles can change labels; official references are linked below.
+
+[TOC]
 
 ## 1. Start the app
 

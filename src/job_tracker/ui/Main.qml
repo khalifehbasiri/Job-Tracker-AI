@@ -29,6 +29,7 @@ ApplicationWindow {
     font.pixelSize: 14
     property int page: 0
     Component.onCompleted: { if (backend.setupNeeded) setupWizard.open() }
+    Shortcut { sequence: "F1"; onActivated: backend.openSetupGuide() }
     property var selectedApp: ({})
     property var expandedReviews: []
     function toggleReview(id) {
@@ -93,10 +94,19 @@ ApplicationWindow {
                     }
                 }
                 Item { Layout.fillHeight: true }
+                ActionButton {
+                    objectName: "openHelpButton"
+                    text: "Help & setup guide · F1"; Layout.fillWidth: true
+                    onClicked: backend.openSetupGuide()
+                    ToolTip.visible: hovered
+                    ToolTip.text: "Open the complete offline guide in your browser."
+                    background: Rectangle { color: parent.hovered ? "#2c5a4e" : "transparent"; radius: 9 }
+                    contentItem: PlainLabel { text: parent.text; color: "#d5e4db"; verticalAlignment: Text.AlignVCenter; leftPadding: 12 }
+                }
                 PlainLabel { text: "LOCAL FIRST"; color: "#aec9ba"; font.pixelSize: 10; font.letterSpacing: 2 }
                 PlainLabel { text: "Your searches. Your records.\nYour API key."; color: "#d5e4db"; lineHeight: 1.4; font.pixelSize: 12 }
                 Rectangle { Layout.fillWidth: true; height: 1; color: "#365d4e"; Layout.topMargin: 15 }
-                PlainLabel { text: "v0.1.0  ·  Development preview"; color: "#91b29f"; font.pixelSize: 11 }
+                PlainLabel { text: "v" + backend.appVersion + "  ·  Open source"; color: "#91b29f"; font.pixelSize: 11 }
             }
         }
         ColumnLayout {
@@ -417,7 +427,7 @@ ApplicationWindow {
                                     HelpTip { explanation: "You supply your own OpenAI API key and API credits. Click for a short setup guide."; onClicked: authHelp.open() }
                                 }
                                 PlainLabel { text: backend.apiReady ? "● API key configured" : "○ Manual mode — add a key to enable AI"; color: Theme.accent }
-                                PlainLabel { text: "Development preview: create and supply your own OpenAI API key. API billing is separate from ChatGPT.\nAI sends selected email text to OpenAI using your account. Model defaults: GPT-6 Luna (Decisions) + GPT-5.4 mini (extraction)."; wrapMode: Text.WordWrap; color: Theme.muted; Layout.fillWidth: true }
+                                PlainLabel { text: "Supply your own OpenAI API key. API billing is separate from ChatGPT.\nAI sends selected email text to OpenAI using your account. Models: GPT-6 Luna (Decisions, provider public beta) + GPT-5.4 mini (extraction)."; wrapMode: Text.WordWrap; color: Theme.muted; Layout.fillWidth: true }
                                 RowLayout {
                                     ActionButton { text: "Create an OpenAI key ↗"; onClicked: Qt.openUrlExternally("https://platform.openai.com/api-keys") }
                                     ActionButton { text: "Step-by-step setup"; onClicked: backend.openSetupGuide() }
@@ -450,9 +460,9 @@ ApplicationWindow {
                                 anchors.fill: parent; spacing: 12
                                 RowLayout {
                                     PlainLabel { text: "Connected mailboxes"; font.bold: true; font.pixelSize: 20; color: Theme.text }
-                                    HelpTip { explanation: "This preview requires your own Google or Microsoft OAuth registration. Click for the setup summary."; onClicked: authHelp.open() }
+                                    HelpTip { explanation: "This release uses your own Google or Microsoft OAuth registration. Click for the setup summary."; onClicked: authHelp.open() }
                                 }
-                                PlainLabel { text: "Email setup is still in development. This preview requires your own Google Desktop OAuth JSON or Microsoft application client ID.\nConnect in your browser after configuring your registration. Access is read-only."; wrapMode: Text.WordWrap; color: Theme.muted; Layout.fillWidth: true }
+                                PlainLabel { text: "Use your own Google Desktop OAuth JSON or Microsoft application client ID. Shared one-click OAuth onboarding is not included.\nConnect in your browser after configuring your registration. Access is read-only."; wrapMode: Text.WordWrap; color: Theme.muted; Layout.fillWidth: true }
                                 RowLayout {
                                     ComboBox { objectName: "settingsProviderSelector"; model: ["Gmail", "Outlook", "All mailboxes"]; currentIndex: ["gmail", "outlook", "all"].indexOf(backend.selectedProvider); enabled: !backend.busy; onActivated: backend.selectProvider(["gmail", "outlook", "all"][currentIndex]) }
                                     ActionButton { visible: backend.selectedProvider !== "outlook"; text: backend.connectingProvider === "gmail" ? "Signing in to Gmail…" : "Connect Gmail"; enabled: !backend.busy && backend.googleConfigured; onClicked: { mailboxConsent.provider = "gmail"; mailboxConsent.open() } }
@@ -491,6 +501,15 @@ ApplicationWindow {
                                 PlainLabel { text: "Exports and backups exclude API keys. Keep database backups private: they include saved email text.\nClosing the window keeps the app in the tray when available. Quit from the tray to stop it."; wrapMode: Text.WordWrap; color: Theme.muted; Layout.fillWidth: true }
                             }
                         }
+                        Card {
+                            Layout.fillWidth: true
+                            ColumnLayout {
+                                anchors.fill: parent; spacing: 12
+                                PlainLabel { text: "About Job Tracker AI · v" + backend.appVersion; font.bold: true; font.pixelSize: 20; color: Theme.text }
+                                PlainLabel { text: "MIT-licensed application with dynamically linked Qt/PySide6 under LGPL-3.0. License texts and dependency notices are included with the app; matching library sources are available with each release."; wrapMode: Text.WordWrap; color: Theme.muted; Layout.fillWidth: true }
+                                ActionButton { text: "Licenses & library sources ↗"; onClicked: Qt.openUrlExternally(backend.licenseUrl) }
+                            }
+                        }
                     }
                 }
             }
@@ -502,7 +521,7 @@ ApplicationWindow {
         standardButtons: Dialog.Close
         ColumnLayout {
             width: parent.width; spacing: 14
-            PlainLabel { text: "Development preview · You create your own credentials. Manual tracking needs none."; wrapMode: Text.WordWrap; Layout.fillWidth: true; color: Theme.accent }
+            PlainLabel { text: "You create your own credentials. Manual tracking needs none."; wrapMode: Text.WordWrap; Layout.fillWidth: true; color: Theme.accent }
             PlainLabel { text: "1. OpenAI: create a project API key at platform.openai.com, configure API billing, then paste it in Settings → Save key → Check key. ChatGPT subscriptions do not include API credits."; wrapMode: Text.WordWrap; Layout.fillWidth: true }
             PlainLabel { text: "2. Gmail: create a Google Cloud project, enable Gmail API, configure External consent in Testing, add yourself as a test user and add gmail.readonly. Create a Desktop app OAuth client and download its JSON. In Configure your OAuth app, import the JSON, then Connect Gmail."; wrapMode: Text.WordWrap; Layout.fillWidth: true }
             PlainLabel { text: "3. Outlook: register an app in Microsoft Entra supporting organizational and personal accounts. Add Mobile and desktop → http://localhost, plus delegated Graph Mail.Read and User.Read permissions. Paste the Application (client) ID in Configure your OAuth app, save it, then Connect Outlook. No client secret is needed."; wrapMode: Text.WordWrap; Layout.fillWidth: true }
@@ -539,7 +558,7 @@ ApplicationWindow {
         closePolicy: Popup.NoAutoClose
         ColumnLayout {
             width: parent.width; spacing: 14
-            PlainLabel { text: "Development preview · Bring your own credentials. Manual tracking is available without email or AI."; wrapMode: Text.WordWrap; Layout.fillWidth: true; color: Theme.muted }
+            PlainLabel { text: "Bring your own credentials. Manual tracking is available without email or AI."; wrapMode: Text.WordWrap; Layout.fillWidth: true; color: Theme.muted }
             PlainLabel { text: backend.message; wrapMode: Text.WordWrap; Layout.fillWidth: true }
             StackLayout {
                 currentIndex: setupWizard.step; Layout.fillWidth: true
@@ -622,7 +641,7 @@ ApplicationWindow {
         standardButtons: Dialog.Close
         ColumnLayout {
             width: parent.width; spacing: 14
-            PlainLabel { text: "This development preview requires your own registration. Follow the full setup guide, then import Google Desktop JSON or save a Microsoft client ID. No project-owned email credentials are bundled."; wrapMode: Text.WordWrap; Layout.fillWidth: true }
+            PlainLabel { text: "Follow the full setup guide to create your own registration, then import Google Desktop JSON or save a Microsoft client ID. No project-owned email credentials are bundled."; wrapMode: Text.WordWrap; Layout.fillWidth: true }
             ActionButton { text: "Open step-by-step setup guide"; onClicked: backend.openSetupGuide() }
             ActionButton { text: "Choose Google Desktop client JSON…"; enabled: !backend.busy; onClicked: backend.chooseGmailClient(!mailSession.checked) }
             Field { id: microsoftClient; text: backend.microsoftClient; placeholderText: "Microsoft public client ID"; Layout.fillWidth: true }
