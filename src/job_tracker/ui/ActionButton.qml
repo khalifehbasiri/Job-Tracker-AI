@@ -1,4 +1,5 @@
 import QtQuick
+import "."
 import QtQuick.Controls
 
 Button {
@@ -8,13 +9,13 @@ Button {
     leftPadding: 16; rightPadding: 16
     background: Rectangle {
         radius: 8
-        color: control.primary ? (control.down ? "#164c43" : "#216e62") : (control.hovered ? "#e5ece2" : "#f2f5ef")
-        border.color: control.primary ? "#216e62" : "#dce4d7"
+        color: control.primary ? (control.down ? (Theme.dark ? "#68b397" : "#164c43") : Theme.accent) : (control.hovered ? Theme.hover : Theme.button)
+        border.color: control.primary ? Theme.accent : Theme.border
         opacity: control.enabled ? 1 : 0.5
     }
     contentItem: Label {
         text: control.text
-        color: control.primary ? "white" : "#3e5b46"
+        color: control.primary ? (Theme.dark ? Theme.background : "white") : Theme.text
         font.pixelSize: 12
         horizontalAlignment: Text.AlignHCenter
         verticalAlignment: Text.AlignVCenter

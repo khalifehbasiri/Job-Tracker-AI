@@ -2,31 +2,67 @@ import json
 from pathlib import Path
 
 import pytest
-from PySide6.QtCore import QObject, QThread, QUrl
+from PySide6.QtCore import QMetaObject, QObject, QThread, QUrl
 from PySide6.QtQml import QQmlApplicationEngine
 from PySide6.QtQuick import QQuickWindow
 from PySide6.QtQuickControls2 import QQuickStyle
 
 from job_tracker.credentials import Credentials
-from job_tracker.db import Scan
+from job_tracker.db import Account, Job, Message, Review, Scan
 from job_tracker.desktop_lock import acquire_database_lock
 from job_tracker.ui.bridge import Bridge
+
+
+def visual_item(parent, name):
+    if parent.objectName() == name:
+        return parent
+    for child in parent.childItems():
+        found = visual_item(child, name)
+        if found is not None:
+            return found
+    return None
 
 
 def test_qml_pages_and_live_records(qapp, qtbot, tracker):
     QQuickStyle.setStyle("Basic")
     search = tracker.create_search("Test search")
     with tracker.db.sessions.begin() as session:
-        session.add(
-            Scan(
-                search_id=search,
-                start_at="2026-09-01T00:00:00Z",
-                end_at="2026-10-01T00:00:00Z",
-                budget=1,
-                state="paused",
-                error="Mailbox request timed out. Resume to retry.",
-            )
+        scan = Scan(
+            search_id=search,
+            start_at="2026-09-01T00:00:00Z",
+            end_at="2026-10-01T00:00:00Z",
+            budget=1,
+            state="paused",
+            error="Mailbox request timed out. Resume to retry.",
         )
+        session.add(scan)
+        account = Account(provider="gmail", address="fictional@example.org", credential_ref="")
+        session.add(account)
+        session.flush()
+        message = Message(
+            account_id=account.id,
+            provider_id="demo-review",
+            subject="A role update",
+            sender="careers@example.org",
+            body="Searchable hidden kiwi text",
+            received_at="2026-10-01T00:00:00Z",
+        )
+        session.add(message)
+        session.flush()
+        job = Job(message_id=message.id, search_id=search, scan_id=scan.id, state="review")
+        session.add(job)
+        session.flush()
+        review = Review(
+            job_id=job.id,
+            search_id=search,
+            reason="Uncertain match",
+            proposed_json=json.dumps(
+                {"kind": "interview", "extraction": {"company": "Company", "role": "Developer"}}
+            ),
+        )
+        session.add(review)
+        session.flush()
+        review_id = review.id
     vault = Credentials()
     # Test machines must never query a user's existing credential store.
     vault.get = lambda name: ""
@@ -48,6 +84,39 @@ def test_qml_pages_and_live_records(qapp, qtbot, tracker):
         qtbot.wait(80)
         assert not window.grabWindow().isNull()
     assert bridge.selectedSearch == search
+    window.setProperty("page", 2)
+    qtbot.wait(30)
+    assert len(bridge.reviews) == 1
+    card = visual_item(window.contentItem(), f"reviewCard-{review_id}")
+    body = visual_item(window.contentItem(), f"reviewBody-{review_id}")
+    assert not card.property("expanded") and not body.property("visible")
+    header = visual_item(window.contentItem(), f"reviewHeader-{review_id}")
+    assert QMetaObject.invokeMethod(header, "clicked")
+    qtbot.wait(30)
+    assert card.property("expanded") and body.property("visible")
+    bridge.refresh()
+    qtbot.wait(30)
+    # Refreshes while scanning must not collapse an email the user is reading.
+    assert visual_item(window.contentItem(), f"reviewCard-{review_id}").property("expanded")
+    review_filter = window.findChild(QObject, "reviewFilter")
+    review_filter.setProperty("text", "kiwi")
+    qtbot.wait(30)
+    assert len(window.property("filteredReviews").toVariant()) == 1
+    review_filter.setProperty("text", "no matching email")
+    qtbot.wait(30)
+    assert len(window.property("filteredReviews").toVariant()) == 0
+    review_filter.setProperty("text", "")
+    for dark in (True, False):
+        bridge.setDarkMode(dark)
+        qtbot.wait(30)
+        assert bridge.darkMode == dark
+        assert window.property("color").name() == ("#12201d" if dark else "#f4f6f1")
+        for popup in ("authHelp", "editSearchDialog"):
+            dialog = window.findChild(QObject, popup)
+            dialog.setProperty("visible", True)
+            qtbot.wait(30)
+            assert dialog.property("height") < window.height()
+            dialog.setProperty("visible", False)
     bridge._busy, bridge._operation = True, "scan"
     bridge.feedback("Processing email 321 of 690…")
     qtbot.wait(80)
@@ -65,6 +134,18 @@ def test_qml_pages_and_live_records(qapp, qtbot, tracker):
     qtbot.wait(30)
     assert not button.property("visible")
     bridge._busy = False
+    assert bridge.editSearch("Updated search", "2026-01-01", "2026-12-31", False)
+    assert bridge.searches[0]["name"] == "Updated search"
+    assert not bridge.editSearch("Bad search", "2027-01-01", "2026-01-01", False)
+    window.setProperty("page", 3)
+    with tracker.db.sessions.begin() as session:
+        session.get(Scan, bridge.scans[0]["id"]).state = "completed"
+    bridge.refresh()
+    qtbot.wait(30)
+    resume = visual_item(window.contentItem(), f"resumeImport-{bridge.scans[0]['id']}")
+    assert not resume.property("visible")
+    bridge.removeImport(bridge.scans[0]["id"])
+    assert not bridge.scans and len(bridge.applications) == 1 and len(bridge.reviews) == 1
     wizard = window.findChild(QObject, "setupWizard")
     wizard.setProperty("visible", True)
     for step in range(4):

@@ -6,7 +6,7 @@ from pathlib import Path
 
 from platformdirs import user_data_path
 from PySide6.QtCore import QTimer, QUrl
-from PySide6.QtGui import QAction, QColor, QFontDatabase, QIcon, QPainter, QPixmap
+from PySide6.QtGui import QAction, QFontDatabase, QIcon
 from PySide6.QtQml import QQmlApplicationEngine
 from PySide6.QtQuick import QQuickWindow
 from PySide6.QtQuickControls2 import QQuickStyle
@@ -26,6 +26,7 @@ def main():
         "--demo", action="store_true", help="Seed fictional records in an isolated demo DB"
     )
     parser.add_argument("--screenshot", type=Path, help="Save a UI screenshot, then exit")
+    parser.add_argument("--theme", choices=("light", "dark"), help="Set and save the app theme")
     parser.add_argument(
         "--screenshot-page",
         type=int,
@@ -45,6 +46,7 @@ def main():
                 QFontDatabase.addApplicationFont(str(fonts / name))
     app.setApplicationName("JobTrackerAI")
     app.setOrganizationName("JobTrackerAI")
+    app.setWindowIcon(QIcon(str(Path(__file__).parent / "assets" / "logo.png")))
     installer_mutex = None
     if sys.platform == "win32":
         import ctypes
@@ -69,6 +71,8 @@ def main():
         return 1
     db = Database(args.database)
     tracker = Tracker(db)
+    if args.theme:
+        tracker.set_setting("theme", args.theme)
     if args.demo and not tracker.searches():
         search = tracker.create_search("2026 · The next chapter", "2026-06-01", "2026-12-31")
         for company, role, stage, outcome in [
@@ -107,13 +111,7 @@ def main():
         window.setProperty("page", args.screenshot_page)
     tray = None
     if QSystemTrayIcon.isSystemTrayAvailable() and not args.screenshot:
-        image = QPixmap(64, 64)
-        image.fill(QColor("#216e62"))
-        painter = QPainter(image)
-        painter.setPen(QColor("white"))
-        painter.drawText(image.rect(), 0x84, "JT")
-        painter.end()
-        tray = QSystemTrayIcon(QIcon(image), app)
+        tray = QSystemTrayIcon(app.windowIcon(), app)
         menu = QMenu()
         show = QAction("Show Job Tracker", menu)
         show.triggered.connect(lambda: (window.show(), window.raise_(), window.requestActivate()))

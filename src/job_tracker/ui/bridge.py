@@ -141,6 +141,9 @@ class Bridge(QObject):
     )
     setupNeeded = Property(bool, lambda self: self._setup_needed, notify=changed)
     selectedProvider = Property(str, lambda self: self._provider, notify=changed)
+    darkMode = Property(
+        bool, lambda self: self.tracker.get_setting("theme", "light") == "dark", notify=changed
+    )
     googleConfigured = Property(
         bool,
         lambda self: bool(self.vault.get("google-oauth-client")),
@@ -275,6 +278,19 @@ class Bridge(QObject):
     @Slot(bool)
     def archiveSearch(self, archived):
         self.local(lambda: self.tracker.archive_search(self._search_id, archived))
+
+    @Slot(str, str, str, bool, result=bool)
+    def editSearch(self, name, start, end, archived):
+        def save():
+            self.tracker.edit_search(self._search_id, name, start, end, archived)
+            self.feedback("Job search updated. Records and exports stay with this search.")
+
+        return bool(self.local(save))
+
+    @Slot(bool)
+    def setDarkMode(self, enabled):
+        self.tracker.set_setting("theme", "dark" if enabled else "light")
+        self.changed.emit()
 
     @Slot(str, int)
     def saveApplication(self, data, application_id):
@@ -532,6 +548,14 @@ class Bridge(QObject):
         self.background(
             lambda: self.importer.resume(scan_id, budget), self.scanFinished, operation="scan"
         )
+
+    @Slot(int)
+    def removeImport(self, scan_id):
+        def hide():
+            self.importer.hide_scan(scan_id, self._search_id)
+            self.feedback("Import removed from history. Job records and saved emails were kept.")
+
+        self.local(hide)
 
     @Slot()
     def poll(self):

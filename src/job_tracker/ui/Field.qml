@@ -1,15 +1,16 @@
 import QtQuick
+import "."
 import QtQuick.Controls
 
 TextField {
     id: control
     implicitHeight: 40
     padding: 12
-    color: "#2e4937"
-    placeholderTextColor: "#8c9785"
+    color: Theme.text
+    placeholderTextColor: Theme.muted
     background: Rectangle {
         radius: 8
-        color: "white"
-        border.color: control.activeFocus ? "#438574" : "#dce4d7"
+        color: Theme.surface
+        border.color: control.activeFocus ? Theme.accent : Theme.border
     }
 }
