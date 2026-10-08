@@ -8,13 +8,17 @@ Data is stored in the platform's local application-data directory, outside the c
 
 ## Job searches
 
-Each application belongs to one named search. Searches have optional dates and an archive state. Views, reviews, history imports, and exports are scoped to the selected search. Late emails match existing application identities before assigning new applications to a search. Ambiguous assignments require review.
+Each application belongs to one named search. Settings can edit its name, optional dates, and archive state without moving records. Dates are descriptive metadata, not scan boundaries. Views, reviews, history imports, and exports are scoped to the selected search. Late emails match existing application identities before assigning new applications to a search. Ambiguous assignments require review.
 
 ## Email and AI
 
-Gmail and Outlook use read-only OAuth through maintained public desktop registrations. Google build metadata is generated from an ignored local file or an encrypted GitHub Actions secret. Forks can override registrations in Advanced OAuth setup. Account credentials remain separate in the OS keyring. Sign-in status is retained per provider, and Outlook profile/mailbox access is verified before account registration. Maintained clients are wired in, but provider approval remains a release prerequisite for general public onboarding; see [public OAuth preparation](public-oauth.md).
+This development preview uses each user's own read-only OAuth registration. Users import a Google Desktop client JSON or enter a Microsoft public client ID inside Settings; neither project-owned OAuth configuration nor user credentials are bundled. Account credentials remain separate in the OS keyring. Sign-in status is retained per provider, and Outlook profile/mailbox access is verified before account registration. Gmail, Outlook, or all mailboxes can be selected for new scans and live polling. Existing scans resume their original mailboxes. Project-owned public onboarding is future work; see [public OAuth preparation](public-oauth.md).
 
 Inbound emails are untrusted data, never instructions. The classifier has no tools or mail mutation privileges. Decisions classifies relevance and event type; a mini model extracts typed fields and evidence. Python validates results, matches application identity, and updates an append-only event history. Manual corrections are preserved. Silence is not rejection; an invitation is not completion.
+
+Automatic updates require relevance and event confidence of at least 0.9. A clear unmatched application, rejection, assessment, interview, or offer with company and role creates a record; ambiguous identities and conflicting requisitions still require review. Only application confirmations can fill a blank applied date: use the explicitly extracted date or fall back to the received date in UTC. Other event types never infer that date. Existing dates remain unchanged. Status comparison normalizes timezone offsets so an older confirmation cannot overwrite a later status. Migration 0003 also repairs blank dates with saved confirmation events without AI calls.
+
+Review cards start collapsed and can be expanded by clicking their header. Local search covers the full body and proposal fields. Expanded IDs are maintained separately from the repeated model so periodic database refreshes do not interrupt reading. A shared QML theme controls components and the window palette; Settings persists light/dark selection. Contextual information indicators and a setup-summary dialog supplement the offline guide.
 
 Scans persist message identities before retrieval. Outlook lists received dates in ascending order; Gmail reads minimal timestamp metadata because its ID listing does not promise chronological ordering. The worker merges all accounts and sorts actual UTC received dates before classification, including resumed jobs. Dates are cached locally; body downloads and AI processing then proceed oldest first. A failed date lookup pauses before paid processing. Only a fully resolved queue advances live-sync checkpoints. Deleted messages are counted as unavailable. Transient mailbox GET failures have bounded retries; account-wide mailbox/API failures pause processing rather than repeating failures across the entire scan. Safe diagnostics and queue counts remain visible in history, and the dashboard refreshes during processing.
 
@@ -23,6 +27,10 @@ AI refusals, incomplete extractions, invalid fields/dates, and unsupported evide
 ## Historical import and spending
 
 Import from email history supports 1, 3, 6, and 12 months plus custom dates, selecting UTC calendar days. Count unprocessed messages, show illustrative token-based cost scenarios, then request a user-selected budget and explicit start. Persist scan state and usage; allow cancellation and resuming. Deduplicate message IDs within each account and reuse results across overlapping imports. Reserve conservative per-request costs before sending requests and stop before the budget is exhausted. Estimates are not provider billing statements.
+
+Removing an import sets its persisted hidden flag. Applications, emails, review items, jobs, foreign keys, and usage entries stay intact. Running imports must be paused first; hidden imports cannot resume. A hidden unfinished import no longer blocks opt-in live polling, but removing it does not itself start any processing. A stale Resume call on a completed import returns its saved state without provider requests.
+
+Excel export creates separate Applications, Events, Tasks, and Search sheets. Stage and Outcome list validation uses the domain enums; task completion uses TRUE/FALSE. Validation covers existing and future rows, including empty exports. These are editable snapshots; importing duplicates does not overwrite app records.
 
 ## Credentials and offline operation
 

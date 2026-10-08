@@ -10,8 +10,13 @@
 - Key check uses model metadata; no mailbox content and no inference request.
 - Offline and repository setup guides with complete registration steps.
 - Oldest-first imports, review recovery, resumable scans, Excel snapshots.
+- Application dates from confirmation emails, local repair of missing confirmation dates, and confident unmatched update records.
+- Collapsed/searchable review inbox with expansion preserved during refresh.
+- Editable search metadata, removable import-history entries preserving records/usage, and completed-import Resume suppression.
+- Saved light/dark theme, contextual help, in-app credential setup summary, and generated app/installer logo.
+- Excel Stage/Outcome/Completed dropdowns covering existing and future rows.
 - PyInstaller folder bundle, Inno Setup per-user installer, dependency notices.
-- Frozen demo smoke test: dashboard/settings rendering, SQLite migrations/integrity, no accounts.
+- Frozen demo smoke test: light dashboard/dark settings rendering, theme/logo assets, SQLite migrations/integrity, no accounts.
 - Only the QML modules used by the app are packaged; unused browser, virtual-keyboard, and charts binaries are rejected by the smoke check.
 - ZIP, installer, SHA-256 checksums, and tag-triggered draft release automation.
 
