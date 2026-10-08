@@ -22,6 +22,10 @@ A Windows-first, open-source desktop app that tracks job applications from your 
 
 ## Run on Windows
 
+Windows preview packaging produces `Job-Tracker-AI-Setup.exe` and `Job-Tracker-AI-Windows-x64.zip`. Published downloads will appear on [GitHub Releases](https://github.com/khalifehbasiri/Job-Tracker-AI/releases). Until a release is published, use the source instructions below. Builds are unsigned and require your own credentials; review the [release checklist](docs/release-checklist.md).
+
+Maintainers can build both downloads with `uv sync --locked --group build`, install Inno Setup 6, and run `uv run python scripts/build_windows.py --installer`. The [Windows preview workflow](https://github.com/khalifehbasiri/Job-Tracker-AI/actions/workflows/windows-release.yml) validates the frozen app and uploads build artifacts. A version tag creates a draft prerelease for review.
+
 Install [uv](https://docs.astral.sh/uv/getting-started/installation/) and Git, then open PowerShell:
 
 ```powershell

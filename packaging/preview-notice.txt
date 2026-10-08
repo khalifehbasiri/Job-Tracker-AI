@@ -1,0 +1,17 @@
+Job Tracker AI - development preview
+
+Email setup is still in development. Bring your own OpenAI API key and Google
+Desktop OAuth registration or Microsoft Application client ID. The app includes
+an offline setup guide and first-run wizard. No developer credentials are supplied.
+
+AI processing sends selected email text to OpenAI and uses your API credits.
+Automatic processing is off by default. Manual tracking and Excel export need
+no AI key. Your local database is not encrypted by this application.
+
+This build is unsigned. Real-account compatibility is still being validated.
+Uninstalling removes the program but preserves records and OS credentials.
+Quit the application from its tray menu before upgrading or uninstalling.
+
+This application uses dynamically linked Qt/PySide6 libraries under their
+applicable open-source license terms. See the included THIRD_PARTY_NOTICES for
+license texts, source information, and library replacement instructions.

@@ -1,18 +1,27 @@
 # Release milestones
 
-## Available now: developer source release
+## Implemented for the development preview
 
-Desktop dashboard, search-scoped SQLite records, manual editing, Excel import/export, OAuth adapters, constrained AI extraction, review inbox, resumable history scanning, credentials, budgets, and tray polling. Automated validation uses fictional email fixtures and rendered QML pages.
+Desktop dashboard, named searches, SQLite migrations, manual editing, Excel import/export, constrained AI extraction, review inbox, resumable oldest-first history scans, budgets, and tray polling.
 
-## Before a wider end-user release
+The welcome wizard and offline guide cover user-owned Google/Microsoft OAuth registrations, OpenAI keys, search creation, and opt-in processing. Gmail/Outlook/all-mailboxes selection controls new scans and polling. Safe connection diagnostics, reconnect/disconnect, masked inputs, OS credential storage, and session-only mode are implemented.
 
-- Validate Gmail, Outlook, Decisions, and extraction end to end with consenting test accounts.
-- Calibrate classification thresholds and identity matching with redacted, labelled examples; measure missed job emails and incorrect matches.
-- Complete Google restricted-scope verification and security assessment, plus Microsoft publisher verification. Maintained desktop clients, build-secret configuration, normal sign-in buttons, and provider diagnostics are implemented; approval and a domain ownership-verifiable privacy site remain pending. See [public OAuth preparation](public-oauth.md).
-- Build and sign a Windows installer, include dependency licenses, and verify upgrades and uninstall behavior on a clean machine.
-- Add an explicit data retention/erase flow, connection diagnostics with safe error messages, and configurable model/pricing updates.
-- Improve editable task scheduling, assessment completion tracking, timezone display, and review corrections before acceptance.
+Windows packaging uses a PyInstaller folder bundle and Inno Setup per-user installer. Builds produce a portable ZIP, installer, checksums, dependency notices, and a frozen-app demo smoke test. GitHub Actions uploads build artifacts and creates draft prereleases for version tags. No project-owned OAuth credentials are bundled.
+
+## Before publishing preview downloads
+
+Follow [the release checklist](release-checklist.md): complete clean-runner packaging, isolated install/upgrade/uninstall validation, corresponding-source/licensing review, and consenting real-account tests. The source repository can remain public while these checks are pending.
+
+## Before ordinary-user production onboarding
+
+- Validate Gmail, Outlook, Decisions, and extraction with newly configured accounts and bounded paid usage.
+- Finish in-app account-history erasure and retention controls.
+- Add the disclosed paid fictional-email AI test; Check key currently verifies extraction-model metadata only.
+- Calibrate classification thresholds and identity matching using redacted labelled examples.
+- Prepare project-owned public OAuth, including Google restricted-scope review/security assessment and a domain-verifiable homepage/privacy site. Microsoft publisher verification helps organizational adoption but is not a universal requirement for personal Outlook access. See [public OAuth preparation](public-oauth.md).
+- Configure supported model/pricing updates and improve scheduling, timezone display, and review corrections.
+- Obtain a code-signing certificate and sign Windows releases. Preview binaries are unsigned.
 
 ## Later possibilities
 
-Opt-in launch at login, desktop reminders, additional AI providers/local models, richer Excel column transformations, and macOS/Linux packaging. These are not included in the current release.
+Opt-in launch at login, desktop reminders, additional AI providers/local models, richer Excel transformations, and macOS/Linux packaging.

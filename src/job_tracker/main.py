@@ -38,6 +38,15 @@ def main():
                 QFontDatabase.addApplicationFont(str(fonts / name))
     app.setApplicationName("JobTrackerAI")
     app.setOrganizationName("JobTrackerAI")
+    installer_mutex = None
+    if sys.platform == "win32":
+        import ctypes
+
+        # Inno Setup refuses upgrades/uninstall while any new app instance is running.
+        create_mutex = ctypes.windll.kernel32.CreateMutexW
+        create_mutex.argtypes = [ctypes.c_void_p, ctypes.c_bool, ctypes.c_wchar_p]
+        create_mutex.restype = ctypes.c_void_p
+        installer_mutex = create_mutex(None, False, "Local\\JobTrackerAI.Desktop")
     if args.demo and args.database is None:
         args.database = user_data_path("JobTrackerAI", appauthor=False) / "demo.sqlite3"
     args.database = (
@@ -74,7 +83,10 @@ def main():
             )
         tracker.create_search("2025 · Co-op search", "2025-01-01", "2025-12-31")
         tracker.set_setting("selected_search", str(search))
-    bridge = Bridge(tracker, Credentials(), onboarding=not (args.demo or args.screenshot))
+    vault = Credentials()
+    if args.demo:
+        vault.get = lambda name: vault.memory.get(name, "")
+    bridge = Bridge(tracker, vault, onboarding=not (args.demo or args.screenshot))
     engine = QQmlApplicationEngine()
     engine.rootContext().setContextProperty("backend", bridge)
     engine.load(QUrl.fromLocalFile(str(Path(__file__).parent / "ui" / "Main.qml")))
@@ -129,6 +141,10 @@ def main():
     app.processEvents()
     db.close()
     database_lock.unlock()
+    if installer_mutex:
+        close_handle = ctypes.windll.kernel32.CloseHandle
+        close_handle.argtypes = [ctypes.c_void_p]
+        close_handle(installer_mutex)
     return result
 
 
