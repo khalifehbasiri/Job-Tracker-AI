@@ -19,7 +19,7 @@ ApplicationWindow {
     palette.highlight: Theme.accent
     palette.highlightedText: Theme.dark ? "#12201d" : "white"
     palette.mid: Theme.border
-    palette.dark: Theme.border
+    palette.dark: Theme.muted
     palette.light: Theme.surface
     palette.alternateBase: Theme.subtle
     palette.toolTipBase: Theme.surface
