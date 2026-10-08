@@ -26,6 +26,13 @@ def main():
         "--demo", action="store_true", help="Seed fictional records in an isolated demo DB"
     )
     parser.add_argument("--screenshot", type=Path, help="Save a UI screenshot, then exit")
+    parser.add_argument(
+        "--screenshot-page",
+        type=int,
+        choices=range(5),
+        default=0,
+        help="Dashboard page to capture (0–4)",
+    )
     args = parser.parse_args()
     QQuickStyle.setStyle("Basic")
     app = QApplication(sys.argv[:1])
@@ -96,6 +103,8 @@ def main():
     window = engine.rootObjects()[0]
     if not isinstance(window, QQuickWindow):
         raise RuntimeError("The desktop root must be a Qt Quick window.")
+    if args.screenshot:
+        window.setProperty("page", args.screenshot_page)
     tray = None
     if QSystemTrayIcon.isSystemTrayAvailable() and not args.screenshot:
         image = QPixmap(64, 64)

@@ -59,6 +59,25 @@ def smoke(bundle):
     )
     if result.returncode or not screenshot.exists() or screenshot.stat().st_size < 1000:
         raise RuntimeError(f"Packaged dashboard smoke test failed (exit code {result.returncode}).")
+    settings = artifacts / "settings.png"
+    settings.unlink(missing_ok=True)
+    subprocess.run(
+        [
+            str(bundle / "Job-Tracker-AI.exe"),
+            "--demo",
+            "--database",
+            str(database),
+            "--screenshot",
+            str(settings),
+            "--screenshot-page",
+            "4",
+        ],
+        cwd=artifacts,
+        timeout=60,
+        check=True,
+        env=os.environ | {"QT_QUICK_BACKEND": "software"},
+    )
+    assert settings.exists() and settings.stat().st_size > 1000
     with sqlite3.connect(database) as connection:
         assert connection.execute("SELECT count(*) FROM applications").fetchone()[0] == 5
         assert connection.execute("SELECT count(*) FROM email_accounts").fetchone()[0] == 0
@@ -66,6 +85,9 @@ def smoke(bundle):
     assert (bundle / "_internal/job_tracker/help/setup.html").exists()
     if list(bundle.rglob("google_desktop_oauth.json")):
         raise RuntimeError("OAuth configuration must not be bundled in the preview.")
+    for unused in ("Qt6WebEngineCore.dll", "Qt6VirtualKeyboard.dll", "Qt6Charts.dll"):
+        if list(bundle.rglob(unused)):
+            raise RuntimeError(f"Unused Qt component was bundled: {unused}")
 
 
 def main():

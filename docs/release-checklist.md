@@ -11,13 +11,15 @@
 - Offline and repository setup guides with complete registration steps.
 - Oldest-first imports, review recovery, resumable scans, Excel snapshots.
 - PyInstaller folder bundle, Inno Setup per-user installer, dependency notices.
-- Frozen demo smoke test: QML rendering, SQLite migrations/integrity, no accounts.
+- Frozen demo smoke test: dashboard/settings rendering, SQLite migrations/integrity, no accounts.
+- Only the QML modules used by the app are packaged; unused browser, virtual-keyboard, and charts binaries are rejected by the smoke check.
 - ZIP, installer, SHA-256 checksums, and tag-triggered draft release automation.
 
 ## Validate before publishing a preview download
 
-- [ ] Confirm Windows release workflow builds on GitHub's clean runner.
-- [ ] Install, upgrade, and uninstall using an isolated Windows account/VM; confirm shortcuts and records are preserved.
+- [x] Windows preview workflow built on GitHub's clean runner.
+- [x] Automated isolated install, same-version upgrade, launch, and uninstall passed on the Windows runner; fictional records survived.
+- [ ] Human validation of shortcuts, a future cross-version upgrade, and a fresh Windows user profile.
 - [ ] Confirm email credentials survive restart, reconnect, and disconnect with a consenting Gmail account and a personal Outlook mailbox.
 - [ ] Confirm both real AI endpoints work for a newly created OpenAI project, using consenting data and an explicit spending limit.
 - [ ] Review notices and corresponding-source distribution requirements for every bundled Qt module; source pointers alone are not a completed licensing audit.

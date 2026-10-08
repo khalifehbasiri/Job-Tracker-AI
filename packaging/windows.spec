@@ -16,7 +16,7 @@ a = Analysis(
     binaries=[], datas=data,
     hiddenimports=['keyring.backends.Windows', 'sqlalchemy.dialects.sqlite',
                    'alembic', 'alembic.runtime.migration', 'google.auth.transport.requests'],
-    hookspath=[], hooksconfig={}, runtime_hooks=[],
+    hookspath=[str(root / 'packaging/hooks')], hooksconfig={}, runtime_hooks=[],
     excludes=['PySide6.QtWebEngineCore', 'PySide6.QtWebEngineWidgets',
               'PySide6.QtWebEngineQuick', 'tkinter', 'pytest'],
     noarchive=False,
