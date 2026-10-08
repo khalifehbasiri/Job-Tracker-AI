@@ -1,4 +1,14 @@
-# Job Tracker AI v0.2.0 — self-configured edition
+# Job Tracker AI v0.2.1 — close-button fix
+
+## Changed in v0.2.1
+
+The window's **X** button and **Alt+F4** now quit the app instead of hiding it in
+the system tray. Shutdown cancels imports, waits for active workers to finish,
+and releases the database and installer locks. Saved import progress can be
+resumed after reopening. Minimize the window to keep automatic processing running.
+
+Added process-level regression tests with and without a tray icon, including
+active import/read workers and database-lock release. All 89 source tests pass.
 
 An open-source Windows desktop app that uses OpenAI Decisions with GPT-6 Luna
 for email classification and GPT-5.4 mini with structured extraction to build
@@ -52,5 +62,7 @@ AI sends selected email text to OpenAI and uses your API credits. Manual trackin
 and Excel import/export have no API costs. Records stay in local, unencrypted
 SQLite. Uninstalling preserves the database and OS credentials.
 
-Quit completely from the tray before upgrading. See README, the setup guide, PRIVACY.md, and
+When upgrading from v0.2.0 or older, use **Quit** in the tray menu to close that
+version completely first. From v0.2.1 onward, closing the window is sufficient.
+See README, the setup guide, PRIVACY.md, and
 docs/release-checklist.md for limitations and validation status.

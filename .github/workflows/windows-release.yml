@@ -48,7 +48,7 @@ jobs:
       - name: Download previous validated installer for upgrade coverage
         env:
           GH_TOKEN: ${{ github.token }}
-        run: gh run download 37715824397 --name Windows-preview-downloads --dir artifacts/previous-downloads
+        run: gh run download 37718024782 --name Windows-release-downloads --dir artifacts/previous-downloads
       - name: Test isolated install, cross-version upgrade, shortcuts, and uninstall
         run: uv run python scripts/test_installer.py --previous-installer artifacts/previous-downloads/Job-Tracker-AI-Setup.exe --check-shortcuts
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4

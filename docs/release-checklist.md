@@ -1,9 +1,21 @@
-# Release quality gates — v0.2.0 self-configured edition
+# Release quality gates — self-configured edition
 
 This release supports user-owned OAuth registrations. Project-owned verification
 is outside its scope. A release must ship reviewable changes, passing tests,
 matching library sources/notices, verified assets, and clear setup/limits. Renaming
 a preview does not establish production reliability or measured AI accuracy.
+
+## v0.2.1 close-button fix
+
+- [x] X/Alt+F4 accept window close and use the normal Qt application shutdown path.
+- [x] Process-level tests cover tray availability, active import/read workers, cancellation, timer shutdown, process exit, and database-lock release.
+- [x] All 89 source tests and lint/format checks pass locally; UI text and offline guide match the behavior.
+- [ ] Clean Windows build, packaged smoke tests, and v0.2.0 → v0.2.1 upgrade/shortcut/uninstall checks.
+- [ ] Downloaded release assets match their checksums; publish only after validation.
+
+No change to the disclosed real-account/API validation limits below. For v0.2.0
+and older, use the tray menu's Quit action before upgrading; those binaries still
+hide the window when closed.
 
 ## Implemented
 
