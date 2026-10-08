@@ -11,8 +11,10 @@ a preview does not establish production reliability or measured AI accuracy.
 - [x] Every dispatch reserves budget independently; failed requests without usage receipts keep conservative reservations. Completed stages and records are reused.
 - [x] Real Qt navigation/Pause remains responsive during a retry wait; cancellation interrupts that wait without another dispatch.
 - [x] All 137 source tests and lint/format checks pass locally, including mocked HTTP through the real OpenAI SDK. No live mailbox or paid AI requests used.
-- [ ] Clean Windows release build, empty first launch/privacy checks, and v0.2.2 → v0.2.3 installer upgrade/shortcut/uninstall checks.
-- [ ] Downloaded assets verified against checksums and privacy inspection before publication as latest.
+- [x] Clean Windows release build, empty first launch/privacy checks, and v0.2.2 → v0.2.3 installer upgrade/shortcut/uninstall checks.
+- [x] All four downloaded assets match SHA256SUMS.txt; portable bundle privacy checks, compiled retry/version modules, and offline guide verified before publication as latest.
+
+Evidence: [137-test Windows/Linux checks](https://github.com/khalifehbasiri/Job-Tracker-AI/actions/runs/37733746945), [clean Windows build and installer upgrade validation](https://github.com/khalifehbasiri/Job-Tracker-AI/actions/runs/37733751348), and [v0.2.3 downloads](https://github.com/khalifehbasiri/Job-Tracker-AI/releases/tag/v0.2.3).
 
 Real-account/model availability and billing validation limits below remain applicable.
 
