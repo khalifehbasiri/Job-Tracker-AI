@@ -93,7 +93,7 @@ Remove in Import history hides an entry while retaining applications, reviews, s
 - Automatic processing idle: check the selected source, connected mailbox, saved key, enabled processing, archived search, budgets, and paused scans.
 - Reconnect after configuring the registration. Disconnect removes the account's local tokens but retains job/email history. Revoke provider consent in Google/Microsoft account settings for provider-side removal.
 - Remove the OpenAI key using Remove in Settings, and revoke it in OpenAI Platform if necessary.
-- Closing the window can keep the worker in the tray. Quit from the tray stops processing and discards session-only credentials.
+- Closing the window (X or Alt+F4) quits the app, stops processing, and discards session-only credentials. Minimize the window to keep automatic processing running. Saved import progress can be resumed after reopening.
 
 ## Local storage and known limitations
 

@@ -37,6 +37,9 @@ def main():
     args = parser.parse_args()
     QQuickStyle.setStyle("Basic")
     app = QApplication(sys.argv[:1])
+    # The window's X/Alt+F4 must quit even when a system tray icon is available.
+    # aboutToQuit below cancels and joins workers before releasing the DB lock.
+    app.setQuitOnLastWindowClosed(True)
     if sys.platform == "win32":
         import os
 
@@ -126,8 +129,6 @@ def main():
         )
         tray.setToolTip("Job Tracker AI")
         tray.show()
-        bridge._tray = True
-        bridge.changed.emit()
     if args.screenshot:
         args.screenshot.parent.mkdir(parents=True, exist_ok=True)
 

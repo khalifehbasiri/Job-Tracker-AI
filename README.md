@@ -63,7 +63,7 @@ Prompts and schemas are committed alongside tests. Classification results retain
 - GPT-6 Luna Decisions classifies application confirmations, rejections, assessments, interviews, offers, and other updates; GPT-5.4 mini extracts structured facts and dates with evidence. Clear unmatched updates can create records automatically. Uncertain matches go to a collapsed, expandable review inbox with full-text search.
 - Historical email scans for 1, 3, 6, or 12 months, plus custom dates. Process oldest first across connected mailboxes. Preview volume and illustrative API costs, set a USD spending limit, then start. Pause and resume without repeating completed AI work. Invalid AI extractions go to review without automatic paid retries.
 - Masked API-key settings, secure OS credential storage, and session-only credentials. No shared developer key.
-- Opt-in polling every five minutes with per-sync and daily AI spending limits. Closing to the tray keeps the worker running while your computer is awake.
+- Opt-in polling every five minutes with per-sync and daily AI spending limits. Minimize the window to keep the worker running while your computer is awake; closing the window quits the app.
 - Database backups and automatic schema migrations. Manual status corrections are protected from automatic updates.
 - Saved light/dark mode, contextual hover indicators, and an in-app credential setup summary with links to the complete offline and online guides.
 - Remove import-history entries without deleting applications, saved emails, reviews, or usage records. Completed imports have no Resume button.
@@ -201,7 +201,7 @@ To enable email processing, follow the welcome wizard or configure your own OAut
 4. For Outlook, register an Entra app supporting organizational and personal accounts. Configure Mobile and desktop → `http://localhost`, plus delegated Graph `Mail.Read` and `User.Read`. Save the Application (client) ID through Configure your OAuth app before Connect Outlook. No client secret is needed.
 5. Select Gmail, Outlook, or all mailboxes, then preview a date range in Email history and set a USD limit. Connecting alone does not start processing. The [complete setup guide](docs/mailbox-setup.md) includes every registration step and troubleshooting detail; click the information indicator beside setup for a summary.
 6. Expand uncertain emails in Review inbox to link, create, or ignore a record. Search includes the full email body. An overlapping scan can resolve older clear “no exact match” reviews using their cached classification/extraction without another AI call; uncertain reviews remain available for explicit resolution.
-7. Export from Applications or Settings. Opt into automatic processing only when ready. Quit from the tray to stop processing and discard session-only credentials.
+7. Export from Applications or Settings. Opt into automatic processing only when ready. Close the app window to stop processing and discard session-only credentials.
 
 **Date applied:** only an application-confirmation email can fill a blank date. Use an explicitly extracted application date when present, otherwise the email's received date in UTC. This fallback is the confirmation date and can differ from the form-submission date. Existing dates are preserved; rejection/interview emails never invent an applied date. On upgrade, blank dates with existing saved confirmation events are repaired locally without API calls.
 
@@ -249,7 +249,7 @@ Release builds fail on unreviewed Qt runtime modules or missing library license 
 | No records after a scan | Correct search/provider, paused or failed status, and Review inbox. Some messages are unrelated or lack enough identity information. |
 | Automatic processing idle | Enabled setting applied, connected selected source, key present, unarchived search, budgets available, and no visible unfinished import waiting for attention. |
 | Excel changes missing in a new export | Exports are snapshots. Edit the record in the app; duplicate imports do not overwrite it. |
-| Source changes not visible | Quit the existing tray instance and start the updated app. |
+| Source changes not visible | Close the existing app window (or use Quit in the tray menu for older versions) and start the updated app. |
 
 ## License
 

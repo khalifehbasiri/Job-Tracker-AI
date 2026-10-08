@@ -62,9 +62,6 @@ ApplicationWindow {
         if (app) backend.showEvents(app.id)
         applicationDialog.open()
     }
-    onClosing: function(close) {
-        if (backend.trayAvailable) { close.accepted = false; root.hide() }
-    }
     Connections {
         target: backend
         function onImportReady() { importDialog.open() }
@@ -498,7 +495,7 @@ ApplicationWindow {
                                     ActionButton { text: "Export this search"; enabled: !backend.busy; onClicked: backend.exportExcel() }
                                     ActionButton { text: root.search.archived ? "Unarchive search" : "Archive search"; enabled: !backend.busy; onClicked: backend.archiveSearch(!root.search.archived) }
                                 }
-                                PlainLabel { text: "Exports and backups exclude API keys. Keep database backups private: they include saved email text.\nClosing the window keeps the app in the tray when available. Quit from the tray to stop it."; wrapMode: Text.WordWrap; color: Theme.muted; Layout.fillWidth: true }
+                                PlainLabel { text: "Exports and backups exclude API keys. Keep database backups private: they include saved email text.\nClosing the window quits the app and stops automatic processing. Minimize the window to keep it running."; wrapMode: Text.WordWrap; color: Theme.muted; Layout.fillWidth: true }
                             }
                         }
                         Card {

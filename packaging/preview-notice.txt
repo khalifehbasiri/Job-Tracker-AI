@@ -13,7 +13,7 @@ API and requires access through your OpenAI project. Provider policies and
 work/school account consent restrictions can affect sign-in. Automated tests
 do not guarantee compatibility with every provider account or model accuracy.
 Uninstalling removes the program but preserves records and OS credentials.
-Quit the application from its tray menu before upgrading or uninstalling.
+Close the application before upgrading or uninstalling. For v0.2.0 and older, use Quit in the tray menu.
 
 This application uses dynamically linked Qt/PySide6 libraries under their
 applicable open-source license terms. See the included THIRD_PARTY_NOTICES for

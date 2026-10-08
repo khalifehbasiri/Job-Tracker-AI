@@ -93,7 +93,6 @@ class Bridge(QObject):
         self._events, self._import_preview, self._scan_plan = [], {}, {}
         self._import_path = ""
         self._estimate = {}
-        self._tray = False
         self._work = None
         self._setup_needed = (
             onboarding
@@ -262,7 +261,6 @@ class Bridge(QObject):
         },
         notify=changed,
     )
-    trayAvailable = Property(bool, lambda self: self._tray, notify=changed)
     dataPath = Property(str, lambda self: str(self.tracker.db.path), constant=True)
     appVersion = Property(str, lambda self: __version__, constant=True)
     privacyUrl = Property(str, lambda self: PRIVACY_URL, constant=True)

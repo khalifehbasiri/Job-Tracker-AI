@@ -93,7 +93,7 @@
 <li>Automatic processing idle: check the selected source, connected mailbox, saved key, enabled processing, archived search, budgets, and paused scans.</li>
 <li>Reconnect after configuring the registration. Disconnect removes the account's local tokens but retains job/email history. Revoke provider consent in Google/Microsoft account settings for provider-side removal.</li>
 <li>Remove the OpenAI key using Remove in Settings, and revoke it in OpenAI Platform if necessary.</li>
-<li>Closing the window can keep the worker in the tray. Quit from the tray stops processing and discards session-only credentials.</li>
+<li>Closing the window (X or Alt+F4) quits the app, stops processing, and discards session-only credentials. Minimize the window to keep automatic processing running. Saved import progress can be resumed after reopening.</li>
 </ul>
 <h2 id="local-storage-and-known-limitations">Local storage and known limitations</h2>
 <p>SQLite contains normalized email text and job history and is not encrypted by the app. Its path is shown in Settings, outside the installation directory. Keep backups private. Uninstall preserves the database and OS credentials; removing the program is not erasing your data.</p>

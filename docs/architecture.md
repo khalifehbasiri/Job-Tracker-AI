@@ -50,4 +50,4 @@ The Microsoft browser callback says only that a sign-in response was received. T
 
 Incremental Git commits group coherent changes. Tests cover search isolation, matching, duplicate and delayed events, retries, budget enforcement, credential handling, and exports. API tests use fixtures and fakes: development does not spend a user's credits or read their inbox. Start with preview/review for uncertain changes and calibrate thresholds against labelled email samples.
 
-Window close minimizes to tray when available. Explicit quit stops the worker. Sync catches up after startup/sleep; the app cannot process email while the computer is off. Optional login startup and signed installers are later release work.
+Closing the window (X or Alt+F4) quits the app, cancels imports, joins background workers, and releases the database/installer locks. Minimize the window to keep automatic processing running. The tray menu also offers Quit. Sync catches up after startup/sleep; the app cannot process email while the computer is off. Optional login startup and signed installers are later release work.
