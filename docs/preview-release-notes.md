@@ -1,4 +1,20 @@
-# Job Tracker AI v0.2.1 — close-button fix
+# Job Tracker AI v0.2.2 — clean-start privacy checks
+
+## Changed in v0.2.2
+
+Public downloads contain no application database, saved email records, connected
+mailboxes, API keys, or OAuth client JSON. Packaging now rejects local databases,
+workbooks, token/configuration files, SQLite content disguised under another
+filename, and recognizable OpenAI secret keys. Automated checks launch the frozen
+app without `--demo` and verify an empty search with no application/mail records.
+
+An update or reinstall preserves the current Windows user's existing local
+database and OS credentials. Source and installed builds share that state.
+Seeing previous records on that same computer does not mean they were bundled
+in the download. Settings and the privacy documentation now explain this.
+
+Added 14 privacy-guard regression cases; all 103 source tests pass. Duplicate
+release workflows leave existing releases and their assets unchanged.
 
 ## Changed in v0.2.1
 

@@ -19,6 +19,20 @@ No change to the disclosed real-account/API validation limits below. For v0.2.0
 and older, use the tray menu's Quit action before upgrading; those binaries still
 hide the window when closed.
 
+## v0.2.2 clean-start privacy checks
+
+- [x] Local developer records/credentials cleared; installed app first launch verified with zero applications, mailboxes, and messages and no stored OpenAI/Google configuration.
+- [x] Every reachable Git object checked after removing historic personal OAuth identifiers and replacing commit emails with GitHub no-reply addresses; main and release tags rewritten.
+- [x] Existing v0.2.0/v0.2.1 public bundles inspected, including compiled first-party modules: no personal identifiers, database, or credential files found.
+- [x] Packaging rejects private data/configuration and checks frozen normal first launch separately from fictional demo mode; all 103 source tests and lint/format checks pass locally.
+- [ ] Clean Windows release/upgrade checks and downloaded asset verification before publication.
+
+The Git rewrite cleans normal repository history and source archives, not copies
+already downloaded or GitHub's retained, unreferenced objects. Removing those
+server-side cached objects requires GitHub Support; no local Git command can
+guarantee that deletion. No real email records, mailbox tokens, or OpenAI API keys
+were found in the public release bundles or reachable repository history.
+
 ## Implemented
 
 - First-run wizard: named search, provider setup, OpenAI key, opt-in polling/budgets.
