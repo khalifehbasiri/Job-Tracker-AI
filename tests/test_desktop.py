@@ -65,6 +65,18 @@ def test_qml_pages_and_live_records(qapp, qtbot, tracker):
     qtbot.wait(30)
     assert not button.property("visible")
     bridge._busy = False
+    wizard = window.findChild(QObject, "setupWizard")
+    wizard.setProperty("visible", True)
+    for step in range(4):
+        wizard.setProperty("step", step)
+        qtbot.wait(40)
+        assert wizard.property("height") < window.height()
+        assert not window.grabWindow().isNull()
+    wizard.setProperty("visible", False)
+    bridge.selectProvider("outlook")
+    qtbot.wait(40)
+    assert window.findChild(QObject, "settingsProviderSelector").property("currentIndex") == 1
+    assert window.findChild(QObject, "historyProviderSelector").property("currentIndex") == 1
     assert not warnings, "\n".join(warnings)
     window.close()
     engine.deleteLater()

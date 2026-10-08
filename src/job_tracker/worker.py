@@ -84,7 +84,9 @@ class Importer:
         self.analyzer_factory, self.mailbox_factory = analyzer_factory, mailbox_factory
         self.cancelled = Event()
 
-    def preview(self, start: str, end: str) -> dict:
+    def preview(self, start: str, end: str, provider: str = "all") -> dict:
+        if provider not in ("all", "gmail", "outlook"):
+            raise ValueError("Choose Gmail, Outlook, or all mailboxes.")
         if self.cancelled.is_set():
             raise BudgetReached("Scan paused. Preview the range again to continue.")
         start, end = timestamp(start), timestamp(end)
@@ -93,10 +95,13 @@ class Importer:
         accounts = [
             account
             for account in self.tracker.accounts()
-            if account["credential_ref"] and self.vault.get(account["credential_ref"])
+            if (provider == "all" or account["provider"] == provider)
+            and account["credential_ref"]
+            and self.vault.get(account["credential_ref"])
         ]
         if not accounts:
-            raise UserFacingError("Connect a mailbox in Settings first.")
+            name = "a mailbox" if provider == "all" else provider.title()
+            raise UserFacingError(f"Connect {name} in Settings first.")
         candidates, dates, uncached, total = {}, {}, 0, 0
         for account in accounts:
             mailbox = self.mailbox_factory(account, self.vault)
@@ -124,6 +129,7 @@ class Importer:
             "dates": dates,
             "total": total,
             "estimate": estimated_cost(uncached),
+            "provider": provider,
         }
 
     def create_scan(self, search_id: int, plan: dict, budget: float) -> int:

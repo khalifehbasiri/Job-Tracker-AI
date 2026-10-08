@@ -167,6 +167,9 @@ class Tracker:
             "sync_budget",
             "selected_search",
             "daily_budget",
+            "selected_provider",
+            "setup_complete",
+            "microsoft_client_id",
         }
         if key not in allowed:
             raise ValueError("This setting cannot be stored in the database.")

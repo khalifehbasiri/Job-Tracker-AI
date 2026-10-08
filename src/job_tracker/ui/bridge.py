@@ -5,22 +5,17 @@ import json
 from datetime import UTC, date, datetime, timedelta
 from pathlib import Path
 
-from PySide6.QtCore import Property, QObject, QRunnable, QThreadPool, QTimer, Signal, Slot
+from PySide6.QtCore import Property, QObject, QRunnable, QThreadPool, QTimer, QUrl, Signal, Slot
 from PySide6.QtWidgets import QFileDialog
 from sqlalchemy import select
 
 from job_tracker.ai import Analyzer
 from job_tracker.credentials import Credentials
-from job_tracker.db import Account, Usage
+from job_tracker.db import Account, Search, Usage
 from job_tracker.email import connect_gmail, connect_outlook
 from job_tracker.errors import describe_error
 from job_tracker.excel import export_search, import_rows, preview_import
-from job_tracker.oauth import (
-    MICROSOFT_CLIENT_ID,
-    PRIVACY_URL,
-    bundled_google_client,
-    google_desktop_client,
-)
+from job_tracker.oauth import HOMEPAGE, PRIVACY_URL, google_desktop_client
 from job_tracker.services import Tracker
 from job_tracker.worker import BudgetReached, Importer
 
@@ -51,7 +46,7 @@ class Bridge(QObject):
     importReady = Signal()
     scanReady = Signal()
 
-    def __init__(self, tracker: Tracker, vault: Credentials, parent=None):
+    def __init__(self, tracker: Tracker, vault: Credentials, parent=None, onboarding=True):
         super().__init__(parent)
         self.tracker, self.vault = tracker, vault
         self.importer = Importer(tracker, vault)
@@ -67,8 +62,17 @@ class Bridge(QObject):
         self._estimate = {}
         self._tray = False
         self._work = None
+        self._setup_needed = (
+            onboarding
+            and tracker.get_setting("setup_complete", "true" if tracker.searches() else "false")
+            != "true"
+        )
+        self._provider = tracker.get_setting("selected_provider", "gmail")
+        if self._provider not in ("gmail", "outlook", "all"):
+            self._provider = "gmail"
         if not tracker.searches():
             self._search_id = tracker.create_search("My job search")
+            tracker.set_setting("setup_complete", "false")
         self.refresh()
         self.timer = QTimer(self)
         self.timer.setInterval(300000)
@@ -132,14 +136,19 @@ class Bridge(QObject):
     trayAvailable = Property(bool, lambda self: self._tray, notify=changed)
     dataPath = Property(str, lambda self: str(self.tracker.db.path), constant=True)
     privacyUrl = Property(str, lambda self: PRIVACY_URL, constant=True)
+    setupGuideUrl = Property(
+        str, lambda self: HOMEPAGE + "/blob/main/docs/mailbox-setup.md", constant=True
+    )
+    setupNeeded = Property(bool, lambda self: self._setup_needed, notify=changed)
+    selectedProvider = Property(str, lambda self: self._provider, notify=changed)
     googleConfigured = Property(
         bool,
-        lambda self: bool(self.vault.get("google-oauth-client") or bundled_google_client()),
+        lambda self: bool(self.vault.get("google-oauth-client")),
         notify=changed,
     )
     microsoftClient = Property(
         str,
-        lambda self: self.tracker.get_setting("microsoft_client_id", MICROSOFT_CLIENT_ID),
+        lambda self: self.tracker.get_setting("microsoft_client_id"),
         notify=changed,
     )
     connectingProvider = Property(
@@ -154,6 +163,39 @@ class Bridge(QObject):
         lambda self: {provider: self.mailboxStatus(provider) for provider in ("gmail", "outlook")},
         notify=changed,
     )
+
+    @Slot(str)
+    def selectProvider(self, provider):
+        if self._busy or provider not in ("gmail", "outlook", "all"):
+            return
+        self._provider = provider
+        self._scan_plan, self._estimate = {}, {}
+        self.tracker.set_setting("selected_provider", provider)
+        self.changed.emit()
+
+    @Slot()
+    def finishSetup(self):
+        self._setup_needed = False
+        self.tracker.set_setting("setup_complete", "true")
+        self.changed.emit()
+
+    @Slot(str, result=bool)
+    def nameInitialSearch(self, name):
+        def save():
+            value = name.strip()
+            if not value or len(value) > 200:
+                raise ValueError("Enter a search name.")
+            with self.tracker.db.sessions.begin() as session:
+                session.get(Search, self._search_id).name = value
+
+        return bool(self.local(save))
+
+    @Slot()
+    def openSetupGuide(self):
+        from PySide6.QtGui import QDesktopServices
+
+        guide = Path(__file__).parents[1] / "help" / "setup.html"
+        QDesktopServices.openUrl(QUrl.fromLocalFile(str(guide)))
 
     @Slot(str, result=str)
     def mailboxStatus(self, provider):
@@ -331,7 +373,11 @@ class Bridge(QObject):
                 analyzer.close()
 
         self.background(
-            test, lambda _: self.feedback("Key accepted; extraction model is accessible.")
+            test,
+            lambda _: self.feedback(
+                "Key accepted; extraction model is accessible. This check did not process email "
+                "or verify Decisions access."
+            ),
         )
 
     @Slot(bool, str, str)
@@ -353,12 +399,12 @@ class Bridge(QObject):
     def connectGmail(self, persist):
         def connect():
             saved = self.vault.get("google-oauth-client")
-            config = json.loads(saved) if saved else bundled_google_client()
+            config = json.loads(saved) if saved else None
             if not config:
                 from job_tracker.errors import UserFacingError
 
                 raise UserFacingError(
-                    "Google sign-in is not configured in this build. Use Advanced OAuth setup."
+                    "Import your own Google Desktop client JSON in OAuth setup first."
                 )
             return connect_gmail(self.tracker, self.vault, config, persist)
 
@@ -440,10 +486,12 @@ class Bridge(QObject):
 
     @Slot(str, str)
     def previewHistory(self, start, end):
+        provider = self._provider
+
         def preview():
             since = date.fromisoformat(start).isoformat() + "T00:00:00+00:00"
             until = (date.fromisoformat(end) + timedelta(days=1)).isoformat() + "T00:00:00+00:00"
-            return self.importer.preview(since, until)
+            return self.importer.preview(since, until, provider)
 
         def complete(plan):
             self._scan_plan = plan | {"search_id": self._search_id}
@@ -494,7 +542,12 @@ class Bridge(QObject):
         selected = next(item for item in self._searches if item["id"] == self._search_id)
         if selected["archived"]:
             return
-        accounts = [item for item in self._accounts if item["connected"]]
+        provider = self._provider
+        accounts = [
+            item
+            for item in self._accounts
+            if item["connected"] and (provider == "all" or item["provider"] == provider)
+        ]
         if not accounts:
             return
         with self.tracker.db.sessions() as session:
@@ -515,7 +568,7 @@ class Bridge(QObject):
         search_id = self._search_id
 
         def run():
-            plan = self.importer.preview(start, end)
+            plan = self.importer.preview(start, end, provider)
             scan_id = self.importer.create_scan(search_id, plan, budget)
             result = self.importer.run(scan_id, plan)
             if result["state"] == "completed":

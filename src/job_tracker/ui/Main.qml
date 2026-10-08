@@ -12,6 +12,7 @@ ApplicationWindow {
     font.family: "Segoe UI"
     font.pixelSize: 14
     property int page: 0
+    Component.onCompleted: { if (backend.setupNeeded) setupWizard.open() }
     property var selectedApp: ({})
     property var filteredApps: backend.applications.filter(function(app) {
         var text = filter.text.toLowerCase()
@@ -65,7 +66,7 @@ ApplicationWindow {
                 PlainLabel { text: "LOCAL FIRST"; color: "#aec9ba"; font.pixelSize: 10; font.letterSpacing: 2 }
                 PlainLabel { text: "Your searches. Your records.\nYour API key."; color: "#d5e4db"; lineHeight: 1.4; font.pixelSize: 12 }
                 Rectangle { Layout.fillWidth: true; height: 1; color: "#365d4e"; Layout.topMargin: 15 }
-                PlainLabel { text: "v0.1.0  ·  Open source"; color: "#91b29f"; font.pixelSize: 11 }
+                PlainLabel { text: "v0.1.0  ·  Development preview"; color: "#91b29f"; font.pixelSize: 11 }
             }
         }
         ColumnLayout {
@@ -282,7 +283,11 @@ ApplicationWindow {
                             ColumnLayout {
                                 anchors.fill: parent; spacing: 15
                                 PlainLabel { text: "Reconstruct a past job search"; font.bold: true; font.pixelSize: 20; color: "#2b4434" }
-                                PlainLabel { text: "Scan connected mailboxes from oldest to newest. Preview first, then set your spending limit.\nRepeated scans reuse saved results. Email dates below use UTC."; color: "#788773"; wrapMode: Text.WordWrap; Layout.fillWidth: true }
+                                RowLayout {
+                                    PlainLabel { text: "Email source"; color: "#61765b" }
+                                    ComboBox { objectName: "historyProviderSelector"; model: ["Gmail", "Outlook", "All mailboxes"]; currentIndex: ["gmail", "outlook", "all"].indexOf(backend.selectedProvider); enabled: !backend.busy; onActivated: backend.selectProvider(["gmail", "outlook", "all"][currentIndex]) }
+                                }
+                                PlainLabel { text: "Scan the selected email source from oldest to newest. This choice also controls automatic processing.\nExisting scans resume their original mailboxes. Preview first, then set your spending limit. Email dates use UTC."; color: "#788773"; wrapMode: Text.WordWrap; Layout.fillWidth: true }
                                 RowLayout {
                                     ComboBox { model: ["Last month", "Last 3 months", "Last 6 months", "Last year", "Custom"]; onActivated: { if (currentIndex < 4) scanStart.text = backend.historyStart([1, 3, 6, 12][currentIndex]) } }
                                     Field { id: scanStart; text: backend.historyStart(1); placeholderText: "Start YYYY-MM-DD" }
@@ -327,14 +332,19 @@ ApplicationWindow {
                                 anchors.fill: parent; spacing: 12
                                 PlainLabel { text: "AI configuration"; font.bold: true; font.pixelSize: 20; color: "#2b4434" }
                                 PlainLabel { text: backend.apiReady ? "● API key configured" : "○ Manual mode — add a key to enable AI"; color: "#438574" }
-                                PlainLabel { text: "AI sends selected email text to OpenAI using your account. Keys are saved in your OS credential store.\nModel defaults: GPT-6 Luna (Decisions) + GPT-5.4 mini (extraction)."; wrapMode: Text.WordWrap; color: "#7b8975"; Layout.fillWidth: true }
+                                PlainLabel { text: "Development preview: create and supply your own OpenAI API key. API billing is separate from ChatGPT.\nAI sends selected email text to OpenAI using your account. Model defaults: GPT-6 Luna (Decisions) + GPT-5.4 mini (extraction)."; wrapMode: Text.WordWrap; color: "#7b8975"; Layout.fillWidth: true }
+                                RowLayout {
+                                    ActionButton { text: "Create an OpenAI key ↗"; onClicked: Qt.openUrlExternally("https://platform.openai.com/api-keys") }
+                                    ActionButton { text: "Step-by-step setup"; onClicked: backend.openSetupGuide() }
+                                    ActionButton { text: "Setup wizard"; enabled: !backend.busy; onClicked: { setupWizard.step = 0; setupWizard.open() } }
+                                }
                                 RowLayout {
                                     Layout.fillWidth: true
                                     Field { id: apiKey; placeholderText: "Paste your OpenAI API key"; echoMode: showKey.checked ? TextInput.Normal : TextInput.Password; Layout.fillWidth: true }
                                     CheckBox { id: showKey; text: "Show" }
                                     CheckBox { id: sessionOnly; text: "Session only" }
                                     ActionButton { text: "Save key"; enabled: !backend.busy && apiKey.text.length > 0; onClicked: { backend.saveKey(apiKey.text, !sessionOnly.checked); apiKey.clear() } }
-                                    ActionButton { text: "Test"; enabled: !backend.busy && backend.apiReady; onClicked: backend.testKey() }
+                                    ActionButton { text: "Check key"; enabled: !backend.busy && backend.apiReady; onClicked: backend.testKey() }
                                     ActionButton { text: "Remove"; enabled: !backend.busy && backend.apiReady; onClicked: backend.removeKey() }
                                 }
                                 RowLayout {
@@ -353,23 +363,26 @@ ApplicationWindow {
                             ColumnLayout {
                                 anchors.fill: parent; spacing: 12
                                 PlainLabel { text: "Connected mailboxes"; font.bold: true; font.pixelSize: 20; color: "#2b4434" }
-                                PlainLabel { text: "Connect your account in your browser. Access is read-only.\nGoogle public verification and Microsoft publisher verification are pending."; wrapMode: Text.WordWrap; color: "#7b8975"; Layout.fillWidth: true }
+                                PlainLabel { text: "Email setup is still in development. This preview requires your own Google Desktop OAuth JSON or Microsoft application client ID.\nConnect in your browser after configuring your registration. Access is read-only."; wrapMode: Text.WordWrap; color: "#7b8975"; Layout.fillWidth: true }
                                 RowLayout {
-                                    ActionButton { text: backend.connectingProvider === "gmail" ? "Signing in to Gmail…" : "Connect Gmail"; enabled: !backend.busy && backend.googleConfigured; onClicked: { mailboxConsent.provider = "gmail"; mailboxConsent.open() } }
-                                    ActionButton { text: backend.connectingProvider === "outlook" ? "Signing in to Outlook…" : "Connect Outlook"; enabled: !backend.busy && backend.microsoftClient.length > 0; onClicked: { mailboxConsent.provider = "outlook"; mailboxConsent.open() } }
+                                    ComboBox { objectName: "settingsProviderSelector"; model: ["Gmail", "Outlook", "All mailboxes"]; currentIndex: ["gmail", "outlook", "all"].indexOf(backend.selectedProvider); enabled: !backend.busy; onActivated: backend.selectProvider(["gmail", "outlook", "all"][currentIndex]) }
+                                    ActionButton { visible: backend.selectedProvider !== "outlook"; text: backend.connectingProvider === "gmail" ? "Signing in to Gmail…" : "Connect Gmail"; enabled: !backend.busy && backend.googleConfigured; onClicked: { mailboxConsent.provider = "gmail"; mailboxConsent.open() } }
+                                    ActionButton { visible: backend.selectedProvider !== "gmail"; text: backend.connectingProvider === "outlook" ? "Signing in to Outlook…" : "Connect Outlook"; enabled: !backend.busy && backend.microsoftClient.length > 0; onClicked: { mailboxConsent.provider = "outlook"; mailboxConsent.open() } }
                                     CheckBox { id: mailSession; text: "Session only" }
                                     Item { Layout.fillWidth: true }
-                                    ActionButton { text: "Advanced OAuth setup"; enabled: !backend.busy; onClicked: advancedOAuth.open() }
+                                    ActionButton { text: "Configure your OAuth app"; enabled: !backend.busy; onClicked: advancedOAuth.open() }
                                 }
-                                PlainLabel { text: backend.mailboxStatuses.gmail; wrapMode: Text.WordWrap; Layout.fillWidth: true; color: "#61765b" }
-                                PlainLabel { text: backend.mailboxStatuses.outlook; wrapMode: Text.WordWrap; Layout.fillWidth: true; color: "#61765b" }
-                                PlainLabel { visible: !backend.googleConfigured; text: "Google sign-in is not included in this build. Configure a desktop client in Advanced OAuth setup."; wrapMode: Text.WordWrap; Layout.fillWidth: true; color: "#965b38" }
+                                PlainLabel { visible: backend.selectedProvider !== "outlook"; text: backend.mailboxStatuses.gmail; wrapMode: Text.WordWrap; Layout.fillWidth: true; color: "#61765b" }
+                                PlainLabel { visible: backend.selectedProvider !== "gmail"; text: backend.mailboxStatuses.outlook; wrapMode: Text.WordWrap; Layout.fillWidth: true; color: "#61765b" }
+                                PlainLabel { visible: backend.selectedProvider !== "outlook" && !backend.googleConfigured; text: "Gmail: import your Desktop OAuth JSON using Configure your OAuth app."; wrapMode: Text.WordWrap; Layout.fillWidth: true; color: "#965b38" }
+                                PlainLabel { visible: backend.selectedProvider !== "gmail" && !backend.microsoftClient.length; text: "Outlook: enter your Application (client) ID using Configure your OAuth app."; wrapMode: Text.WordWrap; Layout.fillWidth: true; color: "#965b38" }
                                 Repeater {
-                                    model: backend.accounts
+                                    model: backend.accounts.filter(function(a) { return backend.selectedProvider === "all" || a.provider === backend.selectedProvider })
                                     delegate: RowLayout {
                                         required property var modelData
                                         Layout.fillWidth: true
                                         PlainLabel { text: modelData.address + " · " + modelData.provider + (modelData.connected ? " · connected" : " · reconnect required"); Layout.fillWidth: true; color: "#61765b" }
+                                        ActionButton { text: "Reconnect"; enabled: !backend.busy && (modelData.provider === "gmail" ? backend.googleConfigured : backend.microsoftClient.length > 0); onClicked: { mailboxConsent.provider = modelData.provider; mailboxConsent.open() } }
                                         ActionButton { text: "Disconnect"; enabled: !backend.busy && modelData.connected; onClicked: backend.disconnectAccount(modelData.id) }
                                     }
                                 }
@@ -395,6 +408,73 @@ ApplicationWindow {
         }
     }
     Dialog {
+        id: setupWizard
+        objectName: "setupWizard"
+        property int step: 0
+        title: "Welcome · " + ["Your job search", "Your email", "Your OpenAI key", "Automatic processing"][step]
+        modal: true; anchors.centerIn: parent; width: 680
+        closePolicy: Popup.NoAutoClose
+        ColumnLayout {
+            width: parent.width; spacing: 14
+            PlainLabel { text: "Development preview · Bring your own credentials. Manual tracking is available without email or AI."; wrapMode: Text.WordWrap; Layout.fillWidth: true; color: "#61765b" }
+            PlainLabel { text: backend.message; wrapMode: Text.WordWrap; Layout.fillWidth: true }
+            StackLayout {
+                currentIndex: setupWizard.step; Layout.fillWidth: true
+                ColumnLayout {
+                    PlainLabel { text: "Name this search, for example 2026 Co-op. You can create separate searches later."; wrapMode: Text.WordWrap; Layout.fillWidth: true }
+                    Field { id: initialSearchName; text: root.search.name; Layout.fillWidth: true }
+                }
+                ColumnLayout {
+                    PlainLabel { text: "Create your own OAuth registration using the setup guide. Import Google's Desktop JSON, or paste Microsoft's Application (client) ID. Connecting grants read-only access and does not start a scan."; wrapMode: Text.WordWrap; Layout.fillWidth: true }
+                    ComboBox { model: ["Gmail", "Outlook"]; currentIndex: backend.selectedProvider === "outlook" ? 1 : 0; enabled: !backend.busy; onActivated: backend.selectProvider(currentIndex === 0 ? "gmail" : "outlook") }
+                    CheckBox { id: wizardMailSession; text: "Store email credentials for this session only"; onToggled: mailSession.checked = checked }
+                    ActionButton { visible: backend.selectedProvider !== "outlook"; text: "Import Google Desktop JSON…"; enabled: !backend.busy; onClicked: backend.chooseGmailClient(!wizardMailSession.checked) }
+                    Field { id: wizardMicrosoft; visible: backend.selectedProvider === "outlook"; text: backend.microsoftClient; placeholderText: "Application (client) ID"; Layout.fillWidth: true }
+                    ActionButton { visible: backend.selectedProvider === "outlook"; text: "Save Microsoft client ID"; enabled: !backend.busy; onClicked: backend.saveMicrosoftClient(wizardMicrosoft.text) }
+                    ActionButton { text: "Connect " + (backend.selectedProvider === "outlook" ? "Outlook" : "Gmail"); enabled: !backend.busy && (backend.selectedProvider === "outlook" ? backend.microsoftClient.length > 0 : backend.googleConfigured); onClicked: { mailboxConsent.provider = backend.selectedProvider === "outlook" ? "outlook" : "gmail"; mailboxConsent.open() } }
+                    PlainLabel { text: backend.mailboxStatuses[backend.selectedProvider === "outlook" ? "outlook" : "gmail"]; wrapMode: Text.WordWrap; Layout.fillWidth: true }
+                }
+                ColumnLayout {
+                    PlainLabel { text: "Create a project API key in OpenAI Platform and configure API billing. ChatGPT subscriptions do not include API credits. Model/Decisions availability depends on your project."; wrapMode: Text.WordWrap; Layout.fillWidth: true }
+                    ActionButton { text: "Create an OpenAI key ↗"; onClicked: Qt.openUrlExternally("https://platform.openai.com/api-keys") }
+                    Field { id: wizardKey; placeholderText: "Paste your OpenAI API key"; echoMode: TextInput.Password; Layout.fillWidth: true }
+                    CheckBox { id: wizardKeySession; text: "Store API key for this session only" }
+                    RowLayout {
+                        ActionButton { text: "Save key"; enabled: !backend.busy && wizardKey.text.length > 0; onClicked: { backend.saveKey(wizardKey.text, !wizardKeySession.checked); wizardKey.clear() } }
+                        ActionButton { text: "Check key"; enabled: !backend.busy && backend.apiReady; onClicked: backend.testKey() }
+                    }
+                    PlainLabel { text: backend.apiReady ? "API key configured. Check key verifies extraction-model access without processing email." : "You can skip AI setup and use manual tracking."; wrapMode: Text.WordWrap; Layout.fillWidth: true }
+                }
+                ColumnLayout {
+                    PlainLabel { text: "When enabled, the app checks your selected email source every five minutes while running. Selected email text goes to OpenAI and uses your API credits. Leave this off to scan only when you choose."; wrapMode: Text.WordWrap; Layout.fillWidth: true }
+                    CheckBox { id: wizardAuto; text: "Enable automatic email processing"; checked: backend.aiEnabled; enabled: backend.apiReady && backend.accounts.some(function(a) { return a.connected && (backend.selectedProvider === "all" || a.provider === backend.selectedProvider) }) }
+                    RowLayout {
+                        PlainLabel { text: "Per sync USD" }
+                        Field { id: wizardSyncBudget; text: backend.syncBudget; Layout.preferredWidth: 90 }
+                        PlainLabel { text: "Per day USD" }
+                        Field { id: wizardDailyBudget; text: backend.dailyBudget; Layout.preferredWidth: 90 }
+                    }
+                }
+            }
+            ActionButton { text: "Open full step-by-step setup guide"; onClicked: backend.openSetupGuide() }
+            RowLayout {
+                Layout.fillWidth: true
+                ActionButton { text: "Set up later"; enabled: !backend.busy; onClicked: { backend.finishSetup(); setupWizard.close() } }
+                Item { Layout.fillWidth: true }
+                ActionButton { text: "Back"; visible: setupWizard.step > 0; enabled: !backend.busy; onClicked: setupWizard.step-- }
+                ActionButton {
+                    text: setupWizard.step === 3 ? "Finish" : "Next"
+                    enabled: !backend.busy && (setupWizard.step !== 3 || (Number(wizardSyncBudget.text) > 0 && Number(wizardSyncBudget.text) <= 10000 && Number(wizardDailyBudget.text) > 0 && Number(wizardDailyBudget.text) <= 10000))
+                    onClicked: {
+                        if (setupWizard.step === 0 && !backend.nameInitialSearch(initialSearchName.text)) return
+                        if (setupWizard.step < 3) setupWizard.step++
+                        else { backend.configureAI(wizardAuto.enabled && wizardAuto.checked, wizardSyncBudget.text, wizardDailyBudget.text); backend.finishSetup(); setupWizard.close() }
+                    }
+                }
+            }
+        }
+    }
+    Dialog {
         id: mailboxConsent
         property string provider: ""
         title: provider === "gmail" ? "Connect Gmail" : "Connect Outlook"
@@ -414,12 +494,13 @@ ApplicationWindow {
     }
     Dialog {
         id: advancedOAuth
-        title: "Advanced OAuth setup"
+        title: "Configure your own OAuth app"
         modal: true; anchors.centerIn: parent; width: 620
         standardButtons: Dialog.Close
         ColumnLayout {
             width: parent.width; spacing: 14
-            PlainLabel { text: "Use your own desktop registration for development or a fork. Normal sign-in uses the maintained registrations included in the app."; wrapMode: Text.WordWrap; Layout.fillWidth: true }
+            PlainLabel { text: "This development preview requires your own registration. Follow the full setup guide, then import Google Desktop JSON or save a Microsoft client ID. No project-owned email credentials are bundled."; wrapMode: Text.WordWrap; Layout.fillWidth: true }
+            ActionButton { text: "Open step-by-step setup guide"; onClicked: backend.openSetupGuide() }
             ActionButton { text: "Choose Google Desktop client JSON…"; enabled: !backend.busy; onClicked: backend.chooseGmailClient(!mailSession.checked) }
             Field { id: microsoftClient; text: backend.microsoftClient; placeholderText: "Microsoft public client ID"; Layout.fillWidth: true }
             ActionButton { text: "Save Microsoft client ID"; enabled: !backend.busy; onClicked: backend.saveMicrosoftClient(microsoftClient.text) }

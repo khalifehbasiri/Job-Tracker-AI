@@ -7,8 +7,10 @@ import pytest
 from job_tracker.credentials import Credentials
 from job_tracker.email import connect_outlook, register
 from job_tracker.errors import UserFacingError
-from job_tracker.oauth import MICROSOFT_CLIENT_ID, google_desktop_client
+from job_tracker.oauth import google_desktop_client
 from job_tracker.ui.bridge import Bridge
+
+MICROSOFT_CLIENT_ID = "11111111-2222-3333-4444-555555555555"
 
 
 def test_native_google_config_excludes_user_tokens_and_pins_endpoints():

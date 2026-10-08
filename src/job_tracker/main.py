@@ -74,7 +74,7 @@ def main():
             )
         tracker.create_search("2025 · Co-op search", "2025-01-01", "2025-12-31")
         tracker.set_setting("selected_search", str(search))
-    bridge = Bridge(tracker, Credentials())
+    bridge = Bridge(tracker, Credentials(), onboarding=not (args.demo or args.screenshot))
     engine = QQmlApplicationEngine()
     engine.rootContext().setContextProperty("backend", bridge)
     engine.load(QUrl.fromLocalFile(str(Path(__file__).parent / "ui" / "Main.qml")))

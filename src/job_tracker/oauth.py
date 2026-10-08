@@ -1,12 +1,7 @@
 """Installed-app registration metadata; user tokens and API keys never belong here."""
 
-import json
-from pathlib import Path
-
 from job_tracker.errors import UserFacingError
 
-MICROSOFT_CLIENT_ID = "REPLACE_WITH_YOUR_OAUTH_CLIENT_ID"
-GOOGLE_CLIENT_FILE = Path(__file__).with_name("google_desktop_oauth.json")
 HOMEPAGE = "https://github.com/khalifehbasiri/Job-Tracker-AI"
 PRIVACY_URL = HOMEPAGE + "/blob/main/PRIVACY.md"
 
@@ -33,9 +28,3 @@ def google_desktop_client(config: dict) -> dict:
             "token_uri": "https://oauth2.googleapis.com/token",
         }
     }
-
-
-def bundled_google_client() -> dict | None:
-    if not GOOGLE_CLIENT_FILE.exists():
-        return None
-    return google_desktop_client(json.loads(GOOGLE_CLIENT_FILE.read_text(encoding="utf-8")))

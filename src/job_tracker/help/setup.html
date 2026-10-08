@@ -1,0 +1,82 @@
+<!doctype html><html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Job Tracker AI setup</title><style>body{font:16px/1.65 system-ui,sans-serif;max-width:900px;margin:40px auto;padding:0 24px;background:#f4f6f1;color:#20362e}a{color:#216e62}code{overflow-wrap:anywhere}li{margin:8px 0}h2{margin-top:40px}</style><main><h1>Development preview: complete setup guide</h1>
+<p>Email onboarding is still in development. <strong>This release requires your own OpenAI API key and your own email OAuth registration.</strong> No shared project credentials are included. Manual tracking and Excel import/export need no credentials. An email password, Microsoft client ID, and OpenAI API key are different things.</p>
+<p>This guide is also available offline from Settings and the welcome wizard. Provider consoles can change labels; official references are linked below.</p>
+<h2>1. Start the app</h2>
+<ol>
+<li>Unzip the entire portable download, then run <code>Job-Tracker-AI.exe</code>. Keep it alongside <code>_internal</code>. Alternatively, run the Windows installer. Source users should follow the README.</li>
+<li>In the first-run wizard, name your search (for example <code>2026 Co-op</code>) and click Next. Create additional searches later using New search.</li>
+<li>Choose Gmail or Outlook. You only need to register the provider you plan to use.</li>
+<li>Next can skip email/AI steps. Set up later opens manual tracking. Reopen the wizard from Settings.</li>
+</ol>
+<h2>2. Create your OpenAI API key</h2>
+<ol>
+<li>Sign in or create an account at <a href="https://platform.openai.com/">OpenAI Platform</a>.</li>
+<li>Select your organization and a project. A dedicated project helps attribute this app's usage.</li>
+<li>Open Billing and configure API billing/credits as offered for your account. ChatGPT subscriptions do not include API credits.</li>
+<li>Open <a href="https://platform.openai.com/api-keys">API keys</a> for the selected project. Choose Create new secret key, name it <code>Job Tracker AI</code>, and create it. Ask your organization administrator if key creation is restricted.</li>
+<li>Copy the displayed secret and keep it private. Do not paste it into GitHub, issues, screenshots, or email. If lost, create a replacement and revoke the old key.</li>
+<li>In the wizard or Settings → AI configuration, paste it into the masked field and click Save key. Session only keeps it in memory until Quit; otherwise the OS credential store protects it.</li>
+<li>Click Check key. This checks extraction-model metadata without processing email or generating output. It does not confirm Decisions access or available billing credit.</li>
+<li>Review provider billing/usage and set app per-sync, daily, and historical-scan spending limits before processing.</li>
+</ol>
+<p>References: <a href="https://developers.openai.com/api/docs/quickstart">OpenAI quickstart</a>, <a href="https://developers.openai.com/api/docs/guides/production-best-practices">project administration</a>.</p>
+<p>This preview uses GPT-6 Luna through Decisions and GPT-5.4 mini for extraction. Availability depends on your project. There is no silent model substitution. The separate paid fictional-email test from the roadmap is not implemented yet.</p>
+<h2>3A. Set up Gmail</h2>
+<ol>
+<li>Open <a href="https://console.cloud.google.com/">Google Cloud Console</a> using the Google account that will own the registration.</li>
+<li>Project selector → New project. Name it <code>Job Tracker AI Personal</code>, create it, and select it.</li>
+<li>APIs &amp; Services → Library → Gmail API → Enable.</li>
+<li>Google Auth platform → Branding → Get started, if prompted. Enter an app name, support email, and developer contact email. Choose External for personal Gmail and complete setup.</li>
+<li>Audience → keep Testing → Test users → Add users. Add the exact Gmail address you will connect, including when it is the project owner.</li>
+<li>Clients → Create client → Desktop app. Name it <code>Job Tracker AI Windows</code>, create it, and download its JSON outside this repository, for example <code>Documents/JobTrackerAI-OAuth/google-desktop-client.json</code>.</li>
+</ol>
+<p>References: <a href="https://developers.google.com/workspace/gmail/api/quickstart/python">Google API/client setup</a>, <a href="https://developers.google.com/workspace/guides/configure-oauth-consent">consent configuration</a>.</p>
+<ol start="7">
+<li>Data Access → Add or remove scopes. Add exactly <code>https://www.googleapis.com/auth/gmail.readonly</code> and save. No send/delete scope is needed. <a href="https://developers.google.com/workspace/gmail/api/auth/scopes">Gmail scope reference</a></li>
+<li>In the wizard or Settings → Configure your OAuth app, choose Import/Choose Google Desktop JSON and select that file. Use the downloaded Desktop (<code>installed</code>) JSON, not a Web client or service-account key.</li>
+<li>Select Session only if desired, then Connect Gmail. Read the disclosure and continue to the browser. Sign in with your listed test account and consent to read-only access.</li>
+<li>Return to the app and wait for your address to appear as connected. Browser callback success alone does not confirm credential storage or mailbox access.</li>
+</ol>
+<p>Desktop sign-in uses PKCE and a random-port loopback callback; no hosted callback website is needed for this Desktop registration. Keep the downloaded file outside Git. Desktop registration metadata cannot act as a confidential backend secret; user tokens and API keys must remain private. <a href="https://developers.google.com/identity/protocols/oauth2/native-app">Desktop OAuth</a></p>
+<p>Testing restricts users and can cause authorization expiry, requiring reconnection. Your own registration is not a blanket exemption from Google's policies. Public restricted-scope access and sending Gmail text to OpenAI can require verification and security assessment. This preview does not claim production approval. <a href="https://developers.google.com/identity/protocols/oauth2/production-readiness/restricted-scope-verification">Google requirements</a></p>
+<h2>3B. Set up Outlook/Microsoft 365</h2>
+<ol>
+<li>Sign in at <a href="https://entra.microsoft.com/">Microsoft Entra admin center</a> and select your directory. You need an Entra tenant and app-registration permission. If unavailable, follow Microsoft's prerequisites or ask your organization administrator.</li>
+<li>Entra ID → App registrations → New registration. Name it <code>Job Tracker AI Personal</code>.</li>
+<li>Supported account types → Accounts in any organizational directory and personal Microsoft accounts (also labelled Any Entra ID Tenant + Personal Microsoft accounts). This matches the app's common authority.</li>
+<li>Register. On Overview, copy Application (client) ID. Do not use Object ID or Directory (tenant) ID.</li>
+</ol>
+<p>Reference: <a href="https://learn.microsoft.com/en-us/entra/identity-platform/quickstart-register-app">Microsoft registration/prerequisites</a>.</p>
+<ol start="5">
+<li>Authentication → Add a platform → Mobile and desktop applications → add <code>http://localhost</code> and save. The preview interface may say Add Redirect URI instead. Confirm supported account types are saved.</li>
+<li>Do not create a client secret. This app uses interactive browser sign-in with PKCE, not a confidential Web client or a device-code flow. <a href="https://learn.microsoft.com/en-us/entra/identity-platform/scenario-desktop-app-configuration">Desktop configuration</a></li>
+<li>API permissions → Add a permission → Microsoft Graph → Delegated permissions. Add Mail.Read and retain/add User.Read. Do not select Application permissions or Mail.ReadWrite. An organization may require administrator consent. <a href="https://learn.microsoft.com/en-us/graph/permissions-reference">Graph permissions</a></li>
+<li>In the wizard or Settings → Configure your OAuth app, paste Application (client) ID and click Save Microsoft client ID.</li>
+<li>Choose Outlook in the email-source selector. Click Connect Outlook, read the disclosure, and sign in through your browser using an account with an Outlook/Exchange mailbox.</li>
+<li>Return to the app and wait for the connected address. If secure storage fails, try Session only. Successful browser authentication can still be followed by failed mailbox access or storage.</li>
+</ol>
+<p>Microsoft has no Google-style Testing/Production switch. Work/school organizations can restrict consent to unverified publishers; personal Outlook success does not guarantee workplace access. <a href="https://learn.microsoft.com/en-us/entra/identity-platform/publisher-verification-overview">Publisher verification</a></p>
+<h2>4. Select a provider and import</h2>
+<ol>
+<li>In Settings or Email history, choose Gmail, Outlook, or All mailboxes. The choice persists and controls new history previews and automatic processing. Other accounts remain saved; existing job records remain visible.</li>
+<li>Select the target job search. Connecting email alone makes no AI requests.</li>
+<li>Email history → choose 1, 3, 6, or 12 months or custom dates → Preview scan. Dates are inclusive in UTC and processing is oldest first. Preview accesses mailbox metadata but makes no AI calls.</li>
+<li>Review message count, illustrative cost, and privacy disclosure. Enter a USD spending limit and confirm to start. Actual provider charges can differ from app estimates.</li>
+<li>Check Review inbox for uncertain results and Applications for confirmed records. Pause keeps completed work. Resume uses the original scan's mailboxes even after changing the provider selector.</li>
+<li>Optionally enable automatic processing in Settings and apply per-sync/daily limits. The app checks every five minutes while running and awake. Paused scans require attention before polling continues.</li>
+<li>Export the selected search to Excel. Export/import/manual editing have no API cost.</li>
+</ol>
+<h2>5. Troubleshooting and removing access</h2>
+<ul>
+<li>Google blocked: check your project, test-user address, Gmail API, Desktop client type, and read-only scope. A different project's JSON may not permit your account.</li>
+<li>Outlook unauthorized_client: check Application client ID and personal-account support. Admin approval required: contact the mailbox's administrator.</li>
+<li>Browser finished but app not connected: read the provider-specific status in Settings. Check mailbox permissions and secure storage, try Session only, and close stale browser sign-in tabs before retrying.</li>
+<li>OpenAI 401: replace the key. 403/404: check project permissions and endpoint/model access. 429: check API billing, credits, and rate limits. Check key success does not establish Decisions access.</li>
+<li>Automatic processing idle: check the selected source, connected mailbox, saved key, enabled processing, archived search, budgets, and paused scans.</li>
+<li>Reconnect after configuring the registration. Disconnect removes the account's local tokens but retains job/email history. Revoke provider consent in Google/Microsoft account settings for provider-side removal.</li>
+<li>Remove the OpenAI key using Remove in Settings, and revoke it in OpenAI Platform if necessary.</li>
+<li>Closing the window can keep the worker in the tray. Quit from the tray stops processing and discards session-only credentials.</li>
+</ul>
+<h2>Local storage and known limitations</h2>
+<p>SQLite contains normalized email text and job history and is not encrypted by the app. Its path is shown in Settings, outside the installation directory. Keep backups private. Uninstall preserves the database and OS credentials; removing the program is not erasing your data.</p>
+<p>Full account-history erasure/retention controls, signed releases, broad real-account validation, and project-owned public OAuth onboarding remain in development. Using your own OAuth registration does not waive provider policies. See PRIVACY.md and the release checklist in the repository.</p></main></html>

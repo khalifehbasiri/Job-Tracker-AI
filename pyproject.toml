@@ -23,6 +23,10 @@ dependencies = [
 job-tracker = "job_tracker.main:main"
 
 [dependency-groups]
+build = [
+    "markdown>=3.7,<4",
+    "pyinstaller>=6.22,<7",
+]
 dev = ["pytest>=8,<10", "pytest-qt>=4.4,<5", "ruff>=0.9,<1"]
 
 [build-system]
@@ -33,7 +37,7 @@ build-backend = "hatchling.build"
 packages = ["src/job_tracker"]
 
 [tool.hatch.build]
-artifacts = ["src/job_tracker/google_desktop_oauth.json"]
+exclude = ["src/job_tracker/google_desktop_oauth.json"]
 
 [tool.ruff]
 line-length = 100

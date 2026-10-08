@@ -1,50 +1,33 @@
-# Public mailbox sign-in
+# Future project-owned public sign-in
 
-The app now uses maintained desktop OAuth registrations for ordinary Connect Gmail / Connect Outlook buttons. Users provide their own OpenAI API key, but do not need to register their own email app when maintained clients are included. Advanced OAuth setup supports forks and development. **Wiring the clients does not establish Google verification or Microsoft publisher verification.** Both remain release gates until the owner completes the provider processes.
+The current development preview requires each user to configure their own email OAuth registration and OpenAI key. No project-owned client ID or Google OAuth JSON is used or shipped. Existing locally configured registrations and connected accounts are preserved. Follow [the complete setup guide](mailbox-setup.md).
 
-## Registration metadata and private user credentials
+Shared Connect Gmail / Connect Outlook onboarding is a future milestone. It is separate from publishing open-source code or a preview download. Bringing your own registration does not waive provider policies.
 
-The Microsoft application client ID is public and included in source. Google Desktop client metadata is read from an ignored generated `src/job_tracker/google_desktop_oauth.json` file. The original downloaded JSON stays outside the repo. GitHub Actions receives it from the encrypted repository secret `GOOGLE_DESKTOP_OAUTH_JSON` and generates a sanitized native-client configuration for the build. Logs never print values. Fork pull requests do not receive the repository secret.
+## Google launch work
 
-The generated file includes only the installed client ID, native-client string, and fixed Google endpoints. It never includes user tokens, OpenAI keys, other client types, or extra JSON fields. It is included in distributed Python packages when supplied at build time. A desktop client cannot keep a client secret confidential once shipped; Google's native-client string identifies a public installed app, not a protected backend. Protect user access/refresh tokens in the OS credential store and use browser sign-in with PKCE. Never bundle a web-client secret or service-account key.
+1. Keep a separate production project with Gmail API enabled and an External audience.
+2. Host a public app homepage and privacy policy on a domain the owner can verify in Google Search Console. A GitHub repository does not establish ownership of github.com. Link the source repository from that site.
+3. Complete Branding, domain ownership verification, and approved branding publication.
+4. Declare only `https://www.googleapis.com/auth/gmail.readonly`. Explain why email bodies are needed to distinguish job applications from ads and extract company, role, status, and explicit deadlines.
+5. Submit restricted-scope verification with a demonstration of consent, mailbox access, authorized processing, review, and data removal.
+6. Disclose transmission of selected email text to OpenAI. This is a third-party server transfer even with local SQLite and user-owned API keys. Plan for applicable independent security assessment and annual renewal; do not claim an entirely-local exemption.
+7. Implement and validate the required retention, erasure, and security controls. The current SQLite database is unencrypted and account-history erasure is not yet exposed in the UI.
+8. Configure the production audience for launch. Publishing alone does not remove verification requirements, warnings, or caps.
 
-For a local build, run:
+Sources: [brand/domain requirements](https://developers.google.com/identity/protocols/oauth2/production-readiness/brand-verification), [restricted-scope requirements](https://developers.google.com/identity/protocols/oauth2/production-readiness/restricted-scope-verification).
 
-```powershell
-uv run python scripts/configure_google_oauth.py --source "C:\private-folder\google-desktop-client.json"
-uv build
-```
+## Microsoft launch work
 
-Source checkouts without the generated configuration can use Advanced OAuth setup. Packaged builds with the maintained configuration open Google sign-in directly. A test-user restriction is controlled by Google, not by this configuration file.
+1. Configure organizational-plus-personal supported accounts, the Mobile/Desktop `http://localhost` redirect, and delegated Mail.Read/User.Read.
+2. Complete branding, homepage, privacy policy, and support information.
+3. Test personal Outlook and accounts in a separate work/school tenant. Organization consent policies may require administrator approval.
+4. Pursue publisher verification for broader organizational adoption. It requires the appropriate verified Microsoft AI Cloud Partner Program organizational identity, tenant, and domain. Verification is not a universal prerequisite for personal Outlook access and does not override workplace consent policies.
 
-## Google owner steps
+Sources: [desktop configuration](https://learn.microsoft.com/en-us/entra/identity-platform/scenario-desktop-app-configuration), [publisher verification](https://learn.microsoft.com/en-us/entra/identity-platform/publisher-verification-overview).
 
-1. In Google Auth Platform, select the Cloud project for the maintained Desktop client. Keep Gmail API enabled and the audience External. Use a separate project/client for development if continuing tests.
-2. In Branding, supply Job Tracker AI's name, a support email, and developer contact details. The project repository is the source/support homepage: <https://github.com/khalifehbasiri/Job-Tracker-AI>. The privacy policy is linked from its README.
-3. Before public brand verification, provide a publicly accessible app homepage and privacy policy on an authorized domain whose ownership the project owner can verify in Google Search Console. A repository on `github.com` does not give the project owner control of that domain. A maintained site can link back to the GitHub repo; do not claim ownership of `github.com` or bypass Google's review. Host the privacy policy on the same site domain and link it from the homepage.
-4. In Data Access, declare only `https://www.googleapis.com/auth/gmail.readonly`. The app reads sender, subject, body, timestamp, and thread identity to recognize application acknowledgments and follow-up events. Metadata-only permission cannot supply the body required for extraction.
-5. Complete Branding verification, publish approved branding, and use Verification Center to submit restricted-scope access. Record a demonstration of consent, read-only connection, explicit scan authorization, spending preview, oldest-first processing, review, export, and credential removal. Use consenting demonstration accounts and keep private emails out of public recordings.
-6. Declare that selected email text is sent directly from the user's desktop to OpenAI for classification and extraction. This is a third-party server transfer even though SQLite is local and the user supplies the API key. Plan for Google's required independent security assessment and annual renewal; do not claim the app qualifies for the entirely-local exemption.
-7. Address the reviewer's requirements, including retention/deletion and security controls, before public launch. The current database is unencrypted and account-wide data erasure is not yet exposed in the UI; these are recorded in the privacy policy and roadmap.
-8. Move the production audience out of Testing when ready for launch and approved access. Publishing alone does not remove the restricted-scope verification requirement, unverified-app warnings, or user caps. Test-mode Gmail refresh tokens can expire after seven days for the requested scopes.
+## Credentials and future builds
 
-Scope justification for the submission: “Job Tracker AI is a desktop productivity and reporting application. It reads the user's email to recognize job applications and subsequent assessments, interviews, offers, and rejections, then maintains application records and timelines visible in the user's local dashboard. It needs email bodies to distinguish application acknowledgments from job advertisements and extract company, role, requisition, and explicit deadlines. It does not send or modify email, read attachments, or use email data for advertising or model training.”
+The original Google JSON stays outside Git. Native Desktop client metadata is extractable from distributed applications and cannot act as a protected backend secret. Future builds must never bundle user tokens, OpenAI keys, service-account keys, or confidential Web-client secrets. Store user credentials in the OS credential store or memory and use PKCE.
 
-## Microsoft owner steps
-
-1. Use the maintained application registration, with supported accounts set to **Any Entra ID Tenant + Personal Microsoft accounts**.
-2. Under Authentication, add the Mobile and desktop platform with `http://localhost`. The Python app uses an interactive public-client flow. Do not create or distribute a confidential client secret.
-3. Add Microsoft Graph **Delegated** permissions `Mail.Read` and `User.Read`. Do not add application-wide permissions or `Mail.ReadWrite`.
-4. Set branding, support/homepage and privacy-policy links. Use the GitHub repository and its privacy policy for current project information; configure a verified publisher domain if pursuing publisher verification.
-5. Follow Microsoft's publisher-verification process with the appropriate verified Microsoft AI Cloud Partner Program account and tenant/domain configuration. The project owner must supply the required organizational identity; source code cannot obtain verification automatically.
-6. Test with a personal Outlook mailbox and a separate work/school tenant. Organizations can require administrator approval even with delegated read-only permissions. The app verifies both profile and mailbox access before showing an account as connected and retains a safe error in Settings if sign-in fails.
-
-## Official references
-
-- [Google Gmail scopes](https://developers.google.com/workspace/gmail/api/auth/scopes)
-- [Google brand verification and domain requirements](https://developers.google.com/identity/protocols/oauth2/production-readiness/brand-verification)
-- [Restricted-scope verification and security assessments](https://developers.google.com/identity/protocols/oauth2/production-readiness/restricted-scope-verification)
-- [Google Workspace user data and Limited Use policy](https://developers.google.com/workspace/workspace-api-user-data-developer-policy)
-- [Google OAuth for desktop apps](https://developers.google.com/identity/protocols/oauth2/native-app)
-- [Microsoft desktop app configuration](https://learn.microsoft.com/en-us/entra/identity-platform/scenario-desktop-app-configuration)
-- [Microsoft publisher verification](https://learn.microsoft.com/en-us/entra/identity-platform/mark-app-as-publisher-verified)
+This preview no longer reads or packages the formerly generated Google build file. Its GitHub Actions workflow does not consume the earlier OAuth repository secret. Provider approvals cannot be completed through application code.
