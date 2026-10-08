@@ -26,6 +26,18 @@ def record(row) -> dict:
     return {column.name: getattr(row, column.name) for column in row.__table__.columns}
 
 
+def validate_search(name: str, start: str, end: str) -> str:
+    name = name.strip()
+    if not name or len(name) > 200:
+        raise ValueError("Enter a search name of 1–200 characters.")
+    for value in (start, end):
+        if value:
+            date.fromisoformat(value)
+    if start and end and start > end:
+        raise ValueError("The end date must follow the start date.")
+    return name
+
+
 class Tracker:
     def __init__(self, db: Database):
         self.db = db
@@ -37,19 +49,20 @@ class Tracker:
             ]
 
     def create_search(self, name: str, start: str = "", end: str = "") -> int:
-        name = name.strip()
-        if not name or len(name) > 200:
-            raise ValueError("Enter a search name of 1–200 characters.")
-        for value in (start, end):
-            if value:
-                date.fromisoformat(value)
-        if start and end and start > end:
-            raise ValueError("The end date must follow the start date.")
+        name = validate_search(name, start, end)
         with self.db.sessions.begin() as session:
             row = Search(name=name, start_date=start, end_date=end)
             session.add(row)
             session.flush()
             return row.id
+
+    def edit_search(self, search_id: int, name: str, start: str, end: str, archived: bool):
+        name = validate_search(name, start, end)
+        with self.db.sessions.begin() as session:
+            row = session.get(Search, search_id)
+            if row is None:
+                raise ValueError("Search no longer exists.")
+            row.name, row.start_date, row.end_date, row.archived = name, start, end, archived
 
     def archive_search(self, search_id: int, archived: bool):
         with self.db.sessions.begin() as session:
@@ -170,6 +183,7 @@ class Tracker:
             "selected_provider",
             "setup_complete",
             "microsoft_client_id",
+            "theme",
         }
         if key not in allowed:
             raise ValueError("This setting cannot be stored in the database.")
@@ -195,6 +209,10 @@ class Tracker:
             return
         effective_at = timestamp(message.received_at)
         extraction = result.get("extraction", {})
+        # Only confirmations establish an application date. Preserve dates already
+        # supplied by the user, even when an older confirmation arrives later.
+        if kind == EventType.APPLICATION and not app.applied_on:
+            app.applied_on = extraction.get("applied_on") or effective_at[:10]
         event = ApplicationEvent(
             application_id=app.id,
             message_id=message.id,
@@ -204,7 +222,7 @@ class Tracker:
         )
         session.add(event)
         session.flush()
-        if not app.manual_override and effective_at >= app.status_at:
+        if not app.manual_override and effective_at >= timestamp(app.status_at):
             app.stage, app.outcome = project_status(app.stage, app.outcome, kind)
             app.status_at = effective_at
         app.updated_at = now()
@@ -243,19 +261,18 @@ class Tracker:
             values = result.get("extraction", {})
             if application_id:
                 app = session.get(Application, application_id)
-                if app is None:
+                if app is None or app.search_id != review.search_id:
                     raise ValueError("Select an existing application.")
             else:
                 data = ApplicationInput(
                     company=values.get("company") or "",
                     role=values.get("role") or "",
                     requisition_id=values.get("requisition_id") or "",
-                    applied_on=values.get("applied_on") or "",
                 )
                 app = Application(
                     search_id=review.search_id,
                     **data.model_dump(mode="json"),
-                    status_at=message.received_at,
+                    status_at=timestamp(message.received_at),
                 )
                 session.add(app)
                 session.flush()

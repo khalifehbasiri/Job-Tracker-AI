@@ -100,6 +100,7 @@ class Scan(Base):
     spent: Mapped[float] = mapped_column(default=0.0)
     state: Mapped[str] = mapped_column(default="pending")
     error: Mapped[str] = mapped_column(default="")
+    hidden: Mapped[bool] = mapped_column(default=False)
     created_at: Mapped[str] = mapped_column(default=now)
 
 

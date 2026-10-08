@@ -287,7 +287,8 @@ class Importer:
             if (
                 not app
                 and confident
-                and result["kind"] == "application"
+                and result["kind"]
+                in ("application", "rejection", "assessment", "interview", "offer")
                 and extraction.get("company")
                 and extraction.get("role")
                 and reason == "No exact application match."
@@ -296,12 +297,11 @@ class Importer:
                     company=extraction["company"],
                     role=extraction["role"],
                     requisition_id=extraction.get("requisition_id") or "",
-                    applied_on=extraction.get("applied_on") or "",
                 )
                 app = Application(
                     search_id=job.search_id,
                     **data.model_dump(mode="json"),
-                    status_at=message.received_at,
+                    status_at=timestamp(message.received_at),
                 )
                 session.add(app)
                 session.flush()
@@ -358,6 +358,8 @@ class Importer:
     def run(self, scan_id: int, plan: dict | None = None, progress=lambda _text: None):
         with self.tracker.db.sessions.begin() as session:
             scan = session.get(Scan, scan_id)
+            if scan is None or scan.hidden:
+                raise ValueError("This import is no longer in history. Preview a new scan.")
             scan.state = "running"
             scan.error = ""
         analyzer = None
@@ -475,9 +477,8 @@ class Importer:
             rows = list(
                 session.scalars(
                     select(Scan)
-                    .where(Scan.search_id == search_id)
+                    .where(Scan.search_id == search_id, Scan.hidden.is_(False))
                     .order_by(Scan.id.desc())
-                    .limit(20)
                 )
             )
             output = []
@@ -501,11 +502,23 @@ class Importer:
                 )
             return output
 
+    def hide_scan(self, scan_id: int, search_id: int):
+        with self.tracker.db.sessions.begin() as session:
+            scan = session.get(Scan, scan_id)
+            if scan is None or scan.search_id != search_id or scan.state == "running":
+                raise ValueError("Pause this import first, or select its job search.")
+            # Keep the scan's foreign keys, cached email results and usage ledger.
+            scan.hidden = True
+
     def resume(self, scan_id: int, budget: float):
         if not math.isfinite(budget) or budget <= 0:
             raise ValueError("Enter a positive budget.")
         with self.tracker.db.sessions.begin() as session:
             scan = session.get(Scan, scan_id)
+            if scan is None or scan.hidden:
+                raise ValueError("Only unfinished imports in history can be resumed.")
+            if scan.state == "completed":
+                return record(scan)  # A stale Resume click must not trigger more API calls.
             if budget < scan.spent:
                 raise ValueError("Budget cannot be below already recorded usage.")
             scan.budget = budget

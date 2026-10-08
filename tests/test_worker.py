@@ -84,7 +84,7 @@ def test_scan_deduplicates_and_reuses_ai(importer, tracker):
     assert importer.run(scan, plan)["state"] == "completed"
     assert FakeAnalyzer.calls == 1
     assert len(tracker.applications(search)) == 1
-    assert tracker.applications(search)[0]["applied_on"] == ""  # Do not infer from arrival.
+    assert tracker.applications(search)[0]["applied_on"] == "2026-10-01"
     second_plan = importer.preview(plan["start"], plan["end"])
     assert second_plan["estimate"]["count"] == 0
     second = importer.create_scan(search, second_plan, 1)

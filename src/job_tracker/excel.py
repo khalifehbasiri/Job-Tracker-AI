@@ -5,6 +5,7 @@ from pathlib import Path
 
 from openpyxl import Workbook, load_workbook
 from openpyxl.styles import Font, PatternFill
+from openpyxl.worksheet.datavalidation import DataValidation
 from openpyxl.worksheet.table import Table, TableStyleInfo
 
 from job_tracker.domain import ApplicationInput, Outcome, Stage
@@ -43,6 +44,8 @@ def export_search(tracker: Tracker, search_id: int, path: Path):
     workbook = Workbook()
     workbook.remove(workbook.active)
     sheet(workbook, "Applications", HEADERS, [[app[field] for field in FIELDS] for app in apps])
+    dropdown(workbook["Applications"], "D", [item.value for item in Stage], "Stage")
+    dropdown(workbook["Applications"], "E", [item.value for item in Outcome], "Outcome")
     events = [
         [app["company"], app["role"], item["kind"], item["effective_at"], item["evidence"]]
         for app in apps
@@ -54,6 +57,7 @@ def export_search(tracker: Tracker, search_id: int, path: Path):
         for task in tracker.tasks(search_id)
     ]
     sheet(workbook, "Tasks", ["Company", "Role", "Task", "Due UTC", "Completed"], tasks)
+    dropdown(workbook["Tasks"], "E", ["TRUE", "FALSE"], "Completed")
     sheet(
         workbook,
         "Search",
@@ -62,6 +66,24 @@ def export_search(tracker: Tracker, search_id: int, path: Path):
     )
     workbook.save(path)
     workbook.close()
+
+
+def dropdown(ws, column: str, options: list[str], label: str):
+    validation = DataValidation(
+        type="list",
+        formula1='"' + ",".join(options) + '"',
+        allow_blank=False,
+        showDropDown=False,
+        showErrorMessage=True,
+        showInputMessage=True,
+    )
+    validation.errorTitle = f"Choose a valid {label.lower()}"
+    validation.error = "Select a value from the dropdown."
+    validation.promptTitle = label
+    validation.prompt = "Choose from the list. Excel edits do not automatically update the app."
+    validation.errorStyle = "stop"
+    ws.add_data_validation(validation)
+    validation.add(f"{column}2:{column}1048576")
 
 
 def preview_import(path: Path) -> dict:
