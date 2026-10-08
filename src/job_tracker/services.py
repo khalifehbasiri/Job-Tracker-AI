@@ -5,7 +5,7 @@ import sqlite3
 from datetime import date
 from pathlib import Path
 
-from sqlalchemy import select
+from sqlalchemy import select, update
 
 from job_tracker.db import (
     Account,
@@ -15,6 +15,7 @@ from job_tracker.db import (
     Job,
     Message,
     Review,
+    Scan,
     Search,
     Setting,
     Task,
@@ -171,6 +172,21 @@ class Tracker:
         with self.db.sessions() as session:
             row = session.get(Setting, key)
             return row.value if row else default
+
+    def settings(self) -> dict[str, str]:
+        with self.db.sessions() as session:
+            return {row.key: row.value for row in session.scalars(select(Setting))}
+
+    def recover_interrupted_scans(self):
+        """Call only after obtaining the desktop's exclusive database lock."""
+        with self.db.sessions.begin() as session:
+            session.execute(
+                update(Scan)
+                .where(Scan.state == "running")
+                .values(
+                    state="paused", error="Previous import was interrupted. Resume to continue."
+                )
+            )
 
     def set_setting(self, key: str, value: str):
         allowed = {

@@ -71,6 +71,7 @@ def main():
         return 1
     db = Database(args.database)
     tracker = Tracker(db)
+    tracker.recover_interrupted_scans()
     if args.theme:
         tracker.set_setting("theme", args.theme)
     if args.demo and not tracker.searches():

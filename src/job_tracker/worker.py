@@ -540,7 +540,7 @@ class Importer:
             # Keep the scan's foreign keys, cached email results and usage ledger.
             scan.hidden = True
 
-    def resume(self, scan_id: int, budget: float):
+    def resume(self, scan_id: int, budget: float, progress=lambda _text: None):
         if not math.isfinite(budget) or budget <= 0:
             raise ValueError("Enter a positive budget.")
         with self.tracker.db.sessions.begin() as session:
@@ -556,4 +556,4 @@ class Importer:
                 select(Job).where(Job.scan_id == scan_id, Job.state == "error")
             ):
                 job.attempts, job.retry_at = 0, ""
-        return self.run(scan_id)
+        return self.run(scan_id, progress=progress)

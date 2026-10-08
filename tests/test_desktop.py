@@ -118,6 +118,7 @@ def test_qml_pages_and_live_records(qapp, qtbot, tracker):
             assert dialog.property("height") < window.height()
             dialog.setProperty("visible", False)
     bridge._busy, bridge._operation = True, "scan"
+    bridge.changed.emit()
     bridge.feedback("Processing email 321 of 690…")
     qtbot.wait(80)
     banner = window.findChild(QObject, "statusBanner")

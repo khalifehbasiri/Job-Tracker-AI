@@ -6,7 +6,7 @@ from job_tracker.credentials import Credentials
 from job_tracker.db import Account
 from job_tracker.email import register
 from job_tracker.errors import UserFacingError
-from job_tracker.ui.bridge import Bridge
+from job_tracker.ui.bridge import Bridge, Work
 from job_tracker.worker import Importer
 
 
@@ -100,7 +100,12 @@ def test_automatic_poll_only_advances_selected_provider_checkpoint(qapp, tracker
     )
     bridge.importer.create_scan = lambda *_args: 0
     bridge.importer.run = lambda *_args: {"state": "completed", "spent": 0}
-    bridge.background = lambda action, complete, **_kwargs: complete(action())
+
+    def run_inline(action, complete, **_kwargs):
+        bridge._work = Work(action)
+        complete(action())
+
+    bridge.background = run_inline
     bridge.poll()
     assert calls[0][0] == "2026-01-31T23:55:00+00:00"
     assert calls[0][2] == "outlook"

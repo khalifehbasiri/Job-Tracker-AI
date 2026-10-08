@@ -85,6 +85,7 @@ ApplicationWindow {
                     delegate: ActionButton {
                         required property string modelData
                         required property int index
+                        objectName: "navigation-" + index
                         text: modelData; Layout.fillWidth: true; implicitHeight: 46
                         onClicked: root.page = index
                         background: Rectangle { color: root.page === index ? "#2c5a4e" : "transparent"; radius: 9 }
@@ -268,12 +269,8 @@ ApplicationWindow {
                     }
                 }
                 // Review inbox
-                ScrollView {
-                    id: reviewScroll
-                    contentWidth: availableWidth
-                    clip: true
-                    ColumnLayout {
-                        width: reviewScroll.availableWidth; spacing: 16
+                ColumnLayout {
+                        spacing: 16
                         RowLayout {
                             Layout.fillWidth: true
                             Field { id: reviewFilter; objectName: "reviewFilter"; placeholderText: "Search subject, sender, company, role, or email text…"; Layout.fillWidth: true }
@@ -283,8 +280,12 @@ ApplicationWindow {
                         PlainLabel { text: root.filteredReviews.length + " of " + backend.reviews.length + " emails · Click an email to expand it."; color: Theme.muted }
                         PlainLabel { visible: backend.reviews.length === 0; text: "All clear. Emails that need a second look will appear here."; color: Theme.muted; Layout.topMargin: 50 }
                         PlainLabel { visible: backend.reviews.length > 0 && root.filteredReviews.length === 0; text: "No emails match your search."; color: Theme.muted }
-                        Repeater {
+                        ListView {
                             id: reviewItems
+                            objectName: "reviewList"
+                            Layout.fillWidth: true; Layout.fillHeight: true
+                            clip: true; spacing: 16; cacheBuffer: 200
+                            ScrollBar.vertical: ScrollBar {}
                             model: root.filteredReviews
                             delegate: Card {
                                 id: reviewCard
@@ -292,7 +293,7 @@ ApplicationWindow {
                                 property bool expanded: root.expandedReviews.indexOf(modelData.id) >= 0
                                 property var proposal: JSON.parse(modelData.proposed_json)
                                 objectName: "reviewCard-" + modelData.id
-                                Layout.fillWidth: true
+                                width: ListView.view.width
                                 ColumnLayout {
                                     anchors.fill: parent
                                     Button {
@@ -312,10 +313,10 @@ ApplicationWindow {
                                     }
                                     PlainLabel { text: modelData.reason; color: Theme.warning; wrapMode: Text.WordWrap; Layout.fillWidth: true }
                                     PlainLabel { visible: !!reviewCard.proposal.extraction.company || !!reviewCard.proposal.extraction.role; text: "Proposed: " + (reviewCard.proposal.extraction.company || "Unknown company") + " / " + (reviewCard.proposal.extraction.role || "Unknown role"); Layout.fillWidth: true; wrapMode: Text.WordWrap; color: Theme.muted }
-                                    PlainLabel { objectName: "reviewBody-" + modelData.id; visible: reviewCard.expanded; text: modelData.body; Layout.fillWidth: true; wrapMode: Text.WordWrap; textFormat: Text.PlainText; color: Theme.muted }
+                                    PlainLabel { objectName: "reviewBody-" + modelData.id; visible: reviewCard.expanded; text: reviewCard.expanded ? modelData.body : ""; Layout.fillWidth: true; wrapMode: Text.WordWrap; textFormat: Text.PlainText; color: Theme.muted }
                                     RowLayout {
                                         visible: reviewCard.expanded
-                                        ComboBox { id: reviewApp; Layout.fillWidth: true; model: backend.applications.map(function(a) { return {id: a.id, name: a.company + " / " + a.role} }); textRole: "name"; valueRole: "id" }
+                                        ComboBox { id: reviewApp; Layout.fillWidth: true; model: reviewCard.expanded ? backend.applications.map(function(a) { return {id: a.id, name: a.company + " / " + a.role} }) : []; textRole: "name"; valueRole: "id" }
                                         ActionButton { text: "Link application"; enabled: !backend.busy && reviewApp.currentIndex >= 0; onClicked: backend.resolveReview(modelData.id, reviewApp.currentValue, false) }
                                         ActionButton { text: "Create application"; visible: !!JSON.parse(modelData.proposed_json).extraction.company && !!JSON.parse(modelData.proposed_json).extraction.role; enabled: !backend.busy; onClicked: backend.resolveReview(modelData.id, 0, false) }
                                         ActionButton { text: "Add manually"; visible: !JSON.parse(modelData.proposed_json).extraction.company || !JSON.parse(modelData.proposed_json).extraction.role; enabled: !backend.busy; onClicked: root.openApplication(null) }
@@ -324,7 +325,6 @@ ApplicationWindow {
                                 }
                             }
                         }
-                    }
                 }
                 // Email history
                 ScrollView {

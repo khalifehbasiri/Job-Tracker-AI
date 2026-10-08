@@ -138,6 +138,7 @@ def test_connection_success_refreshes_settings_and_failure_stays_visible(qapp, q
     assert bridge.connectingProvider == "outlook"
     assert not bridge.scanActive
     qtbot.waitUntil(lambda: not bridge.busy, timeout=3000)
+    qtbot.waitUntil(lambda: bool(bridge.accounts), timeout=3000)
     assert bridge.accounts[0]["provider"] == "outlook"
     assert bridge.accounts[0]["connected"]
     assert "connected read-only" in bridge.mailboxStatuses["outlook"]

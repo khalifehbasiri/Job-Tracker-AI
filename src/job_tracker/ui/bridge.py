@@ -4,8 +4,9 @@ import calendar
 import json
 from datetime import UTC, date, datetime, timedelta
 from pathlib import Path
+from time import monotonic
 
-from PySide6.QtCore import Property, QObject, QRunnable, QThreadPool, QTimer, QUrl, Signal, Slot
+from PySide6.QtCore import Property, QObject, QRunnable, Qt, QThreadPool, QTimer, QUrl, Signal, Slot
 from PySide6.QtWidgets import QFileDialog
 from sqlalchemy import select
 
@@ -31,6 +32,14 @@ class Work(QRunnable):
         super().__init__()
         self.action = action
         self.signals = Signals()
+        self._last_progress = float("-inf")
+
+    def report_progress(self, text):
+        # Bound the event queue independently of mailbox size or staging speed.
+        current = monotonic()
+        if current - self._last_progress >= 0.1:
+            self._last_progress = current
+            self.signals.progress.emit(text)
 
     def run(self):
         try:
@@ -43,6 +52,15 @@ class Work(QRunnable):
 
 class Bridge(QObject):
     changed = Signal()
+    messageChanged = Signal()
+    searchesChanged = Signal()
+    applicationsChanged = Signal()
+    tasksChanged = Signal()
+    reviewsChanged = Signal()
+    scansChanged = Signal()
+    accountsChanged = Signal()
+    eventsChanged = Signal()
+    configurationChanged = Signal()
     importReady = Signal()
     scanReady = Signal()
 
@@ -52,6 +70,20 @@ class Bridge(QObject):
         self.importer = Importer(tracker, vault)
         self.pool = QThreadPool(self)
         self.pool.setMaxThreadCount(1)
+        # A serialized import prevents concurrent billing. Reads have their own
+        # pool so the dashboard can refresh during a long network operation.
+        self.read_pool = QThreadPool(self)
+        self.read_pool.setMaxThreadCount(1)
+        self._read_jobs = set()
+        self._refreshing = False
+        self._full_refresh_pending = False
+        self._revision = 0
+        self._closing = False
+        self._settings = {}
+        self._api_ready = self._google_configured = False
+        self._searches, self._apps, self._tasks = [], [], []
+        self._reviews, self._scans, self._accounts = [], [], []
+        self._event_request = 0
         self._busy = False
         self._operation = ""
         self._mailbox_messages = {}
@@ -85,44 +117,140 @@ class Bridge(QObject):
 
     def refreshWhileBusy(self):
         if self._busy:
-            self.refresh()
+            self.requestRefresh()
+
+    def readSnapshot(self, search_id, credentials=False, connected=None):
+        searches = self.tracker.searches()
+        if search_id not in [item["id"] for item in searches]:
+            search_id = searches[0]["id"]
+        accounts = self.tracker.accounts()
+        connected = connected or {}
+        snapshot = {
+            "search_id": search_id,
+            "searches": searches,
+            "apps": self.tracker.applications(search_id),
+            "tasks": self.tracker.tasks(search_id),
+            "reviews": self.tracker.reviews(search_id),
+            "scans": self.importer.scans(search_id),
+            "accounts": [
+                {
+                    **item,
+                    "connected": bool(self.vault.get(item["credential_ref"]))
+                    if credentials
+                    else connected.get(item["id"], False),
+                }
+                for item in accounts
+            ],
+            "settings": self.tracker.settings(),
+        }
+        if credentials:
+            snapshot["api_ready"] = bool(self.vault.get("openai"))
+            snapshot["google_configured"] = bool(self.vault.get("google-oauth-client"))
+        return snapshot
+
+    def applySnapshot(self, snapshot):
+        selected = self._search_id
+        accounts_changed = self._accounts != snapshot["accounts"]
+        self._search_id = snapshot["search_id"]
+        for name, signal in (
+            ("searches", self.searchesChanged),
+            ("apps", self.applicationsChanged),
+            ("tasks", self.tasksChanged),
+            ("reviews", self.reviewsChanged),
+            ("scans", self.scansChanged),
+            ("accounts", self.accountsChanged),
+        ):
+            if getattr(self, "_" + name) != snapshot[name]:
+                setattr(self, "_" + name, snapshot[name])
+                signal.emit()
+        configuration = (self._settings, self._api_ready, self._google_configured)
+        self._settings = snapshot["settings"]
+        self._api_ready = snapshot.get("api_ready", self._api_ready)
+        self._google_configured = snapshot.get("google_configured", self._google_configured)
+        if configuration != (self._settings, self._api_ready, self._google_configured):
+            self.configurationChanged.emit()
+        if selected != self._search_id or accounts_changed:
+            # Connection status text also depends on the mailbox model.
+            self.changed.emit()
+
+    def readBackground(self, action, complete, failed=None):
+        work = Work(action)
+        self._read_jobs.add(work)
+
+        def finish(result):
+            self._read_jobs.discard(work)
+            if not self._closing:
+                complete(result)
+
+        def failure(text):
+            self._read_jobs.discard(work)
+            if not self._closing and failed:
+                failed(text)
+
+        work.signals.success.connect(finish, Qt.QueuedConnection)
+        work.signals.failed.connect(failure, Qt.QueuedConnection)
+        self.read_pool.start(work)
+
+    def requestRefresh(self, credentials=False):
+        if self._closing:
+            return
+        if self._refreshing:
+            self._full_refresh_pending |= credentials
+            return
+        self._refreshing = True
+        search_id, revision = self._search_id, self._revision
+        connected = {item["id"]: item["connected"] for item in self._accounts}
+
+        def finish(snapshot=None):
+            self._refreshing = False
+            if snapshot and revision == self._revision:
+                self.applySnapshot(snapshot)
+            elif snapshot and credentials:
+                # A theme/local edit invalidated this read. Do not lose a newly
+                # connected mailbox or key while discarding its stale settings.
+                self._full_refresh_pending = True
+            if self._full_refresh_pending:
+                self._full_refresh_pending = False
+                self.requestRefresh(credentials=True)
+
+        self.readBackground(
+            lambda: self.readSnapshot(search_id, credentials, connected),
+            finish,
+            lambda _text: finish(),
+        )
 
     def refresh(self):
-        self._searches = self.tracker.searches()
-        if self._search_id not in [item["id"] for item in self._searches]:
-            self._search_id = self._searches[0]["id"]
-        self._apps = self.tracker.applications(self._search_id)
-        self._tasks = self.tracker.tasks(self._search_id)
-        self._reviews = self.tracker.reviews(self._search_id)
-        self._scans = self.importer.scans(self._search_id)
-        self._accounts = [
-            {**item, "connected": bool(self.vault.get(item["credential_ref"]))}
-            for item in self.tracker.accounts()
-        ]
+        if self._busy:
+            self.requestRefresh()
+            return
+        # Initial load and small, idle local edits. Never called synchronously
+        # from import progress, the refresh timer or background completion.
+        self._revision += 1
+        self.applySnapshot(self.readSnapshot(self._search_id, credentials=True))
         self.changed.emit()
 
-    searches = Property("QVariantList", lambda self: self._searches, notify=changed)
-    applications = Property("QVariantList", lambda self: self._apps, notify=changed)
-    tasks = Property("QVariantList", lambda self: self._tasks, notify=changed)
-    reviews = Property("QVariantList", lambda self: self._reviews, notify=changed)
-    scans = Property("QVariantList", lambda self: self._scans, notify=changed)
-    accounts = Property("QVariantList", lambda self: self._accounts, notify=changed)
-    events = Property("QVariantList", lambda self: self._events, notify=changed)
+    searches = Property("QVariantList", lambda self: self._searches, notify=searchesChanged)
+    applications = Property("QVariantList", lambda self: self._apps, notify=applicationsChanged)
+    tasks = Property("QVariantList", lambda self: self._tasks, notify=tasksChanged)
+    reviews = Property("QVariantList", lambda self: self._reviews, notify=reviewsChanged)
+    scans = Property("QVariantList", lambda self: self._scans, notify=scansChanged)
+    accounts = Property("QVariantList", lambda self: self._accounts, notify=accountsChanged)
+    events = Property("QVariantList", lambda self: self._events, notify=eventsChanged)
     selectedSearch = Property(int, lambda self: self._search_id, notify=changed)
     busy = Property(bool, lambda self: self._busy, notify=changed)
     scanActive = Property(
         bool, lambda self: self._busy and self._operation == "scan", notify=changed
     )
-    message = Property(str, lambda self: self._message, notify=changed)
-    apiReady = Property(bool, lambda self: bool(self.vault.get("openai")), notify=changed)
+    message = Property(str, lambda self: self._message, notify=messageChanged)
+    apiReady = Property(bool, lambda self: self._api_ready, notify=configurationChanged)
     aiEnabled = Property(
-        bool, lambda self: self.tracker.get_setting("ai_enabled") == "true", notify=changed
+        bool, lambda self: self._settings.get("ai_enabled") == "true", notify=configurationChanged
     )
     syncBudget = Property(
-        str, lambda self: self.tracker.get_setting("sync_budget", "0.25"), notify=changed
+        str, lambda self: self._settings.get("sync_budget", "0.25"), notify=configurationChanged
     )
     dailyBudget = Property(
-        str, lambda self: self.tracker.get_setting("daily_budget", "1.00"), notify=changed
+        str, lambda self: self._settings.get("daily_budget", "1.00"), notify=configurationChanged
     )
     estimate = Property("QVariantMap", lambda self: self._estimate, notify=changed)
     importPreview = Property(
@@ -142,17 +270,19 @@ class Bridge(QObject):
     setupNeeded = Property(bool, lambda self: self._setup_needed, notify=changed)
     selectedProvider = Property(str, lambda self: self._provider, notify=changed)
     darkMode = Property(
-        bool, lambda self: self.tracker.get_setting("theme", "light") == "dark", notify=changed
+        bool,
+        lambda self: self._settings.get("theme", "light") == "dark",
+        notify=configurationChanged,
     )
     googleConfigured = Property(
         bool,
-        lambda self: bool(self.vault.get("google-oauth-client")),
-        notify=changed,
+        lambda self: self._google_configured,
+        notify=configurationChanged,
     )
     microsoftClient = Property(
         str,
-        lambda self: self.tracker.get_setting("microsoft_client_id"),
-        notify=changed,
+        lambda self: self._settings.get("microsoft_client_id", ""),
+        notify=configurationChanged,
     )
     connectingProvider = Property(
         str,
@@ -208,9 +338,10 @@ class Bridge(QObject):
         name = "Gmail" if provider == "gmail" else "Outlook"
         return f"{name}: {connected} connected." if connected else f"{name}: no connected mailbox."
 
+    @Slot(str)
     def feedback(self, text):
         self._message = text
-        self.changed.emit()
+        self.messageChanged.emit()
 
     def local(self, action):
         if self._busy:
@@ -238,21 +369,27 @@ class Bridge(QObject):
         self.changed.emit()
         work = Work(action)
         self._work = work
-        work.signals.progress.connect(self.feedback)
+        work.signals.progress.connect(self.feedback, Qt.QueuedConnection)
 
         def finished(result):
+            if self._closing:
+                return
             self._busy = False
             self._operation = ""
             complete(result)
-            self.refresh()
+            self.changed.emit()
+            self.requestRefresh(credentials=True)
 
         def failed(text):
+            if self._closing:
+                return
             self._busy = False
             self._operation = ""
             self.feedback(text)
             if on_failure:
                 on_failure(text)
-            self.refresh()
+            self.changed.emit()
+            self.requestRefresh(credentials=True)
 
         work.signals.success.connect(finished)
         work.signals.failed.connect(failed)
@@ -289,8 +426,15 @@ class Bridge(QObject):
 
     @Slot(bool)
     def setDarkMode(self, enabled):
-        self.tracker.set_setting("theme", "dark" if enabled else "light")
-        self.changed.emit()
+        theme = "dark" if enabled else "light"
+        self._settings = self._settings | {"theme": theme}
+        self._revision += 1
+        self.configurationChanged.emit()
+        self.readBackground(
+            lambda: self.tracker.set_setting("theme", theme),
+            lambda _: self.requestRefresh(),
+            lambda _: self.feedback("Could not save the theme preference."),
+        )
 
     @Slot(str, int)
     def saveApplication(self, data, application_id):
@@ -306,8 +450,17 @@ class Bridge(QObject):
 
     @Slot(int)
     def showEvents(self, application_id):
-        self._events = self.tracker.events(application_id)
-        self.changed.emit()
+        self._event_request += 1
+        request = self._event_request
+        self._events = []
+        self.eventsChanged.emit()
+
+        def complete(events):
+            if request == self._event_request:
+                self._events = events
+                self.eventsChanged.emit()
+
+        self.readBackground(lambda: self.tracker.events(application_id), complete)
 
     @Slot(int, bool)
     def completeTask(self, task_id, completed):
@@ -521,14 +674,14 @@ class Bridge(QObject):
         if not self._scan_plan or self._scan_plan["search_id"] != self._search_id:
             self.feedback("Preview the email range for this search first.")
             return
-        if not self.vault.get("openai"):
+        if not self.apiReady:
             self.feedback("Add your API key in Settings first.")
             return
         plan, search_id = self._scan_plan, self._search_id
 
         def run():
             scan_id = self.importer.create_scan(search_id, plan, budget)
-            return self.importer.run(scan_id, plan, self._work.signals.progress.emit)
+            return self.importer.run(scan_id, plan, self._work.report_progress)
 
         self.background(run, self.scanFinished, operation="scan")
 
@@ -546,7 +699,9 @@ class Bridge(QObject):
     @Slot(int, float)
     def resumeScan(self, scan_id, budget):
         self.background(
-            lambda: self.importer.resume(scan_id, budget), self.scanFinished, operation="scan"
+            lambda: self.importer.resume(scan_id, budget, self._work.report_progress),
+            self.scanFinished,
+            operation="scan",
         )
 
     @Slot(int)
@@ -594,7 +749,7 @@ class Bridge(QObject):
         def run():
             plan = self.importer.preview(start, end, provider)
             scan_id = self.importer.create_scan(search_id, plan, budget)
-            result = self.importer.run(scan_id, plan)
+            result = self.importer.run(scan_id, plan, self._work.report_progress)
             if result["state"] == "completed":
                 with self.tracker.db.sessions.begin() as session:
                     for item in accounts:
@@ -604,7 +759,9 @@ class Bridge(QObject):
         self.background(run, self.scanFinished, operation="scan")
 
     def stop(self):
+        self._closing = True
         self.timer.stop()
         self.refresh_timer.stop()
         self.importer.cancelled.set()
         self.pool.waitForDone()
+        self.read_pool.waitForDone()
