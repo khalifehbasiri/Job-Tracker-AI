@@ -10,8 +10,10 @@ a preview does not establish production reliability or measured AI accuracy.
 - [x] X/Alt+F4 accept window close and use the normal Qt application shutdown path.
 - [x] Process-level tests cover tray availability, active import/read workers, cancellation, timer shutdown, process exit, and database-lock release.
 - [x] All 89 source tests and lint/format checks pass locally; UI text and offline guide match the behavior.
-- [ ] Clean Windows build, packaged smoke tests, and v0.2.0 → v0.2.1 upgrade/shortcut/uninstall checks.
-- [ ] Downloaded release assets match their checksums; publish only after validation.
+- [x] Clean Windows build, packaged smoke tests, and v0.2.0 → v0.2.1 upgrade/shortcut/uninstall checks.
+- [x] Downloaded release assets match their checksums; packaged QML/version/guide verified and v0.2.1 published as latest.
+
+Evidence: [89-test Windows/Linux checks](https://github.com/khalifehbasiri/Job-Tracker-AI/actions/runs/37719462341), [clean Windows release and upgrade checks](https://github.com/khalifehbasiri/Job-Tracker-AI/actions/runs/37719461858), and [v0.2.1 downloads](https://github.com/khalifehbasiri/Job-Tracker-AI/releases/tag/v0.2.1).
 
 No change to the disclosed real-account/API validation limits below. For v0.2.0
 and older, use the tray menu's Quit action before upgrading; those binaries still
