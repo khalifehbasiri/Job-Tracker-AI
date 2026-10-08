@@ -4,7 +4,7 @@ import pytest
 from openpyxl import load_workbook
 from sqlalchemy import select
 
-from job_tracker.db import Application, ApplicationEvent, Job, Message, Scan, Usage
+from job_tracker.db import Application, ApplicationEvent, Job, Message, Review, Scan, Usage
 from job_tracker.domain import Outcome, Stage
 from job_tracker.email import register
 from job_tracker.excel import export_search
@@ -194,3 +194,62 @@ def test_excel_dropdowns_cover_existing_and_new_rows(tracker, tmp_path):
         assert workbook["Tasks"].data_validations.dataValidation[0].formula1 == '"TRUE,FALSE"'
     finally:
         workbook.close()
+
+
+@pytest.mark.parametrize(
+    ("confidence", "reason", "evidence", "replayed", "ambiguous_now"),
+    [
+        (0.99, "No exact application match.", "Rejected", True, False),
+        (0.6, "No exact application match.", "Rejected", False, False),
+        (0.99, "Multiple roles match this email.", "Rejected", False, False),
+        (0.99, "No exact application match.", "Unsupported evidence", False, False),
+        (0.99, "No exact application match.", "Rejected", False, True),
+    ],
+)
+def test_rescan_applies_clear_old_reviews_without_another_ai_call(
+    tracker, confidence, reason, evidence, replayed, ambiguous_now
+):
+    search = tracker.create_search("2026")
+    register(tracker, "gmail", "candidate@example.org", "fake")
+    account = tracker.accounts()[0]
+    importer = Importer(tracker, None)
+    plan = {"start": "2026-09-01", "end": "2026-11-01"}
+    old_scan = importer.create_scan(search, plan, 1)
+    job_id = importer.stage_message(account, "old-review", old_scan, search)
+    with tracker.db.sessions.begin() as session:
+        job = session.get(Job, job_id)
+        job.state = "review"
+        message = session.get(Message, job.message_id)
+        message.state, message.body = "processed", "Rejected"
+        message.received_at = "2026-10-01T12:00:00Z"
+        result = {
+            "kind": "rejection",
+            "confidence": confidence,
+            "probability": 0.99,
+            "extraction": {"company": "Company", "role": "Engineer", "evidence": evidence},
+        }
+        message.result_json = json.dumps(result)
+        session.add(
+            Review(job_id=job_id, search_id=search, reason=reason, proposed_json=json.dumps(result))
+        )
+    if ambiguous_now:
+        for date in ("2026-08-01", "2026-09-01"):
+            tracker.save_application(
+                search, {"company": "Company", "role": "Engineer", "applied_on": date}
+            )
+    existing_count = len(tracker.applications(search))
+    new_scan = importer.create_scan(search, plan, 1)
+    assert importer.stage_message(account, "old-review", new_scan, search) == job_id
+    importer.process(job_id, None)  # Any attempt to classify/extract would fail this test.
+    assert len(tracker.applications(search)) == existing_count + int(replayed)
+    assert len(tracker.reviews(search)) == int(not replayed)
+    if ambiguous_now:
+        assert tracker.reviews(search)[0]["reason"] == "Multiple roles match this email."
+    if replayed:
+        assert tracker.applications(search)[0]["outcome"] == "Rejected"
+        assert tracker.applications(search)[0]["applied_on"] == ""
+        assert importer.stage_message(account, "old-review", new_scan, search) == job_id
+        importer.process(job_id, None)
+        assert len(tracker.applications(search)) == 1
+    with tracker.db.sessions() as session:
+        assert session.scalar(select(Usage.id)) is None

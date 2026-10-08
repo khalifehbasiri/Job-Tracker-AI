@@ -76,6 +76,8 @@ Microsoft has no Google-style Testing/Production switch. Work/school organizatio
 
 Application confirmations fill missing applied dates using an explicit date or the email's received date in UTC. Other email types never invent that date. Clear, confident unmatched rejections/interviews/assessments/offers can create records; ambiguous or incomplete identities remain in review. Review emails start collapsed: click a header to expand, or search by subject, sender, company/role, or any body text.
 
+For an older clear rejection already awaiting review with “No exact application match,” preview/start the same date range again. The app can apply the improved rule using saved classification/extraction and supported evidence without another AI call for that email. Matching is checked again; uncertain or now-ambiguous results remain in review. Other uncached emails in the range can still use API credits, so inspect the preview estimate.
+
 Settings → Current job search → Edit search changes its name, dates, or archive state without moving records. Search dates are labels, not scan boundaries. Settings → Appearance saves a light/dark preference. Information indicators provide hover help; click the one beside AI/email setup for a short summary and guide links.
 
 Remove in Import history hides an entry while retaining applications, reviews, saved emails, and usage history. Pause a running import first. Removed imports cannot resume; new scans can reuse cached results. Completed imports have no Resume button. Excel Stage/Outcome/Completed dropdowns edit only the exported snapshot; duplicate imports do not overwrite existing app records.

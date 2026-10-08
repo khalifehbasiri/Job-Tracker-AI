@@ -20,6 +20,25 @@ class BudgetReached(Exception):
     pass
 
 
+def confident_classification(result: dict) -> bool:
+    return all(
+        isinstance(result.get(field), (int, float)) and 0.9 <= result[field] <= 1
+        for field in ("probability", "confidence")
+    )
+
+
+def can_create_unmatched(result: dict, reason: str) -> bool:
+    extraction = result.get("extraction") or {}
+    return bool(
+        reason == "No exact application match."
+        and not result.get("review_reason")
+        and confident_classification(result)
+        and result.get("kind") in ("application", "rejection", "assessment", "interview", "offer")
+        and extraction.get("company")
+        and extraction.get("role")
+    )
+
+
 def match_application(session, message: Message, extraction: dict, search_id: int):
     """Exact thread/ID matches cross years; weaker company/role matches stay search-scoped."""
     if message.thread_id:
@@ -208,6 +227,21 @@ class Importer:
             if job is None:
                 job = Job(message_id=message_id, search_id=search_id, scan_id=scan_id)
                 session.add(job)
+            elif job.state == "review":
+                review = session.scalar(select(Review).where(Review.job_id == job.id))
+                cached = json.loads(message.result_json or "{}")
+                evidence = (cached.get("extraction") or {}).get("evidence") or ""
+                if (
+                    review is not None
+                    and review.state == "pending"
+                    and can_create_unmatched(cached, review.reason)
+                    and evidence.strip()
+                    and evidence in message.body
+                ):
+                    # A user-started overlapping scan can apply the improved matching
+                    # rule to clear old reviews using saved results, with no AI retry.
+                    job.state, job.attempts, job.retry_at = "pending", 0, ""
+                    job.scan_id = scan_id
             elif job.state in ("pending", "error"):
                 job.scan_id = scan_id
             session.flush()
@@ -283,16 +317,8 @@ class Importer:
                 return
             extraction = result["extraction"]
             app, reason = match_application(session, message, extraction, job.search_id)
-            confident = result["probability"] >= 0.9 and result["confidence"] >= 0.9
-            if (
-                not app
-                and confident
-                and result["kind"]
-                in ("application", "rejection", "assessment", "interview", "offer")
-                and extraction.get("company")
-                and extraction.get("role")
-                and reason == "No exact application match."
-            ):
+            confident = confident_classification(result)
+            if not app and can_create_unmatched(result, reason):
                 data = ApplicationInput(
                     company=extraction["company"],
                     role=extraction["role"],
@@ -308,15 +334,19 @@ class Importer:
             if app and confident and result["kind"] != "other":
                 self.tracker.add_event(session, app, message, result)
                 job.state = "done"
+                review = session.scalar(select(Review).where(Review.job_id == job.id))
+                if review is not None and review.state == "pending":
+                    review.state = "accepted"
             else:
-                session.add(
-                    Review(
+                review = session.scalar(select(Review).where(Review.job_id == job.id))
+                if review is None:
+                    review = Review(
                         job_id=job.id,
                         search_id=job.search_id,
-                        proposed_json=json.dumps(result),
-                        reason=reason or "The classification needs your confirmation.",
                     )
-                )
+                    session.add(review)
+                review.proposed_json = json.dumps(result)
+                review.reason = reason or "The classification needs your confirmation."
                 job.state = "review"
             session.get(Message, message.id).state = "processed"
 

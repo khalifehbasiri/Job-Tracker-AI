@@ -24,6 +24,8 @@ Scans persist message identities before retrieval. Outlook lists received dates 
 
 AI refusals, incomplete extractions, invalid fields/dates, and unsupported evidence go to manual review rather than repeated paid retries. Validated fields with unsupported evidence are proposals only and cannot update applications automatically. Existing failed extractions from the earlier release recover from cached classifications into review without another API request. Empty email bodies go directly to review. Completed classifications and extractions are reused across overlapping scans.
 
+An explicitly started overlapping scan can also requeue an older pending “No exact application match” review when its cached classification is confident, has company and role, and has evidence still present in the saved body. Matching is evaluated again against current records. Successful updates accept the existing review; a newly ambiguous match updates that same review instead of duplicating it. Unsupported evidence and other uncertain reviews remain untouched. This recovery makes no additional AI call.
+
 ## Historical import and spending
 
 Import from email history supports 1, 3, 6, and 12 months plus custom dates, selecting UTC calendar days. Count unprocessed messages, show illustrative token-based cost scenarios, then request a user-selected budget and explicit start. Persist scan state and usage; allow cancellation and resuming. Deduplicate message IDs within each account and reuse results across overlapping imports. Reserve conservative per-request costs before sending requests and stop before the budget is exhausted. Estimates are not provider billing statements.
