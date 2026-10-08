@@ -12,7 +12,14 @@ from job_tracker.ai import RATES, Analyzer, estimated_cost
 from job_tracker.db import Account, Application, ApplicationEvent, Job, Message, Review, Scan, Usage
 from job_tracker.domain import ApplicationInput, now, timestamp
 from job_tracker.email import Mailbox
-from job_tracker.errors import ReviewRequired, UserFacingError, blocks_scan, describe_error
+from job_tracker.errors import (
+    AutoRetryExhausted,
+    ReviewRequired,
+    UserFacingError,
+    blocks_scan,
+    describe_error,
+)
+from job_tracker.retries import MAX_AI_ATTEMPTS, retry_delay, transient_ai_error
 from job_tracker.services import Tracker, record
 
 
@@ -247,7 +254,35 @@ class Importer:
             session.flush()
             return job.id
 
-    def process(self, job_id: int, analyzer):
+    def retry_ai(self, action, operation, progress):
+        for attempt in range(1, MAX_AI_ATTEMPTS + 1):
+            if self.cancelled.is_set():
+                raise BudgetReached("Scan paused; resume to continue.")
+            try:
+                return action()
+            except Exception as error:
+                if not transient_ai_error(error):
+                    raise
+                if attempt == MAX_AI_ATTEMPTS:
+                    raise AutoRetryExhausted(
+                        f"{describe_error(error)} Automatic retries exhausted after "
+                        f"{MAX_AI_ATTEMPTS} attempts. Resume later."
+                    ) from error
+                delay = retry_delay(error, attempt)
+                if delay is None:
+                    raise AutoRetryExhausted(
+                        "OpenAI requested a wait longer than the two-minute automatic retry "
+                        "window. Saved progress is kept; resume later."
+                    ) from error
+                progress(
+                    f"Retrying OpenAI {operation} in {math.ceil(delay)}s "
+                    f"(attempt {attempt + 1}/{MAX_AI_ATTEMPTS}). {describe_error(error)}"
+                )
+                # Interruptible worker wait: Pause and window close wake it immediately.
+                if self.cancelled.wait(delay):
+                    raise BudgetReached("Scan paused; resume to continue.") from None
+
+    def process(self, job_id: int, analyzer, progress=lambda _text: None):
         with self.tracker.db.sessions.begin() as session:
             job = session.get(Job, job_id)
             if job.state in ("done", "review", "unavailable") or job.attempts >= 3:
@@ -302,15 +337,20 @@ class Importer:
             return self.bill(job.scan_id, message.id, operation, model, amount)
 
         if "kind" not in result:
-            result = analyzer.classify(message, bill)
+            result = self.retry_ai(
+                lambda: analyzer.classify(message, bill), "classification", progress
+            )
             with self.tracker.db.sessions.begin() as session:
                 session.get(Message, message.id).result_json = json.dumps(result)
         if result["probability"] >= 0.1 and "extraction" not in result:
-            result["extraction"] = analyzer.extract(message, bill)
+            result["extraction"] = self.retry_ai(
+                lambda: analyzer.extract(message, bill), "extraction", progress
+            )
             with self.tracker.db.sessions.begin() as session:
                 session.get(Message, message.id).result_json = json.dumps(result)
         with self.tracker.db.sessions.begin() as session:
             job = session.get(Job, job_id)
+            job.error, job.retry_at = "", ""
             if result["probability"] < 0.1:
                 job.state = "done"
                 session.get(Message, message.id).state = "ignored"
@@ -454,7 +494,7 @@ class Importer:
                     raise BudgetReached("Scan paused; resume to continue.")
                 progress(f"Processing email {index + 1} of {len(staged)}…")
                 try:
-                    self.process(job_id, analyzer)
+                    self.process(job_id, analyzer, progress)
                 except ReviewRequired as error:
                     with self.tracker.db.sessions() as session:
                         job = session.get(Job, job_id)

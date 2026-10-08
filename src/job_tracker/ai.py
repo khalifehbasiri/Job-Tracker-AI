@@ -86,6 +86,7 @@ class Analyzer:
     def __init__(self, key: str):
         if not key:
             raise UserFacingError("Add your OpenAI API key in Settings.")
+        # The import worker retries explicitly so every dispatch reserves its own budget.
         self.client = OpenAI(api_key=key, max_retries=0, timeout=45)
 
     def close(self):

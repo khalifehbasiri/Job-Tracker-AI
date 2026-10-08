@@ -18,15 +18,52 @@ class ReviewRequired(UserFacingError):
         self.extraction = extraction
 
 
+class AutoRetryExhausted(UserFacingError):
+    """Pause the scan after bounded recovery, rather than retrying each queued email."""
+
+
+def openai_error_details(error: APIStatusError) -> tuple[str, str]:
+    body = error.body if isinstance(error.body, dict) else {}
+    details = body.get("error") if isinstance(body.get("error"), dict) else body
+    return tuple(
+        details.get(field) if isinstance(details.get(field), str) else ""
+        for field in ("code", "type")
+    )
+
+
+def openai_quota_error(error: APIStatusError) -> bool:
+    code, kind = openai_error_details(error)
+    return (
+        code
+        in {
+            "insufficient_quota",
+            "billing_hard_limit_reached",
+            "billing_not_active",
+            "usage_limit_reached",
+            "organization_quota_exceeded",
+        }
+        or kind == "insufficient_quota"
+    )
+
+
 def describe_error(error: Exception) -> str:
     if isinstance(error, UserFacingError):
         return str(error)
     if isinstance(error, APITimeoutError):
-        return "OpenAI timed out. Saved progress is kept; resume to retry."
+        return "OpenAI timed out. Saved progress is kept."
     if isinstance(error, APIConnectionError):
-        return "Cannot reach OpenAI. Check your connection, then resume."
+        return "Cannot reach OpenAI. Check your connection."
     if isinstance(error, APIStatusError):
         status = error.status_code
+        if status >= 500:
+            return f"OpenAI is temporarily unavailable (HTTP {status}). Saved progress is kept."
+        if status == 429 and openai_quota_error(error):
+            return "OpenAI API credits or quota are unavailable. Check API billing/limits."
+        code, kind = openai_error_details(error)
+        if status == 429 and (
+            code in {"rate_limit_exceeded", "slow_down"} or kind == "rate_limit_error"
+        ):
+            return "OpenAI rate limit reached. Saved progress is kept."
         messages = {
             400: "OpenAI rejected the request format. Please report this application error.",
             401: "OpenAI rejected your API key. Replace or test it in Settings.",
@@ -66,6 +103,8 @@ def describe_error(error: Exception) -> str:
 
 
 def blocks_scan(error: Exception) -> bool:
+    if isinstance(error, AutoRetryExhausted):
+        return True
     if isinstance(error, (APIStatusError, APIConnectionError, RefreshError, TransportError)):
         return True  # Do not repeat account-wide failures across hundreds of paid requests.
     if isinstance(error, (httpx.RequestError, SQLAlchemyError)):

@@ -38,7 +38,9 @@ class Work(QRunnable):
     def report_progress(self, text):
         # Bound the event queue independently of mailbox size or staging speed.
         current = monotonic()
-        if current - self._last_progress >= 0.1:
+        # Retry notices occur at most once per bounded backoff; never drop the
+        # notice and leave an old "Processing" message visible throughout a wait.
+        if text.startswith("Retrying OpenAI ") or current - self._last_progress >= 0.1:
             self._last_progress = current
             self.signals.progress.emit(text)
 

@@ -53,6 +53,8 @@ Refusals, incomplete/invalid extractions, unsupported evidence, and ambiguous id
 
 The [worker](../src/job_tracker/worker.py) stages message identities and records processing state in SQLite. Completed classifications/extractions are cached; pauses and overlapping scans reuse them. Restart recovery converts interrupted running scans to paused without automatically making paid requests. An interrupted request with no persisted response cannot be promised exactly-once billing, so usage reservations remain conservative.
 
+The [explicit retry policy](../src/job_tracker/retries.py) allows four attempts per AI stage for connection failures, timeouts, HTTP 408/409/5xx, and clearly identified rate-limit errors. Without a server delay, waits increase from roughly 2 to 4 to 8 seconds with jitter. Retry-After is respected up to 120 seconds per wait; a longer delay pauses instead of retrying early. Permanent errors, quota failures, ambiguous 429s, and unusable model outputs do not trigger automatic paid retries. Exhaustion pauses the entire scan so an outage cannot generate four failed requests for every queued email. Cached classification survives extraction retries. Every dispatch reserves budget separately, including retries; missing usage receipts retain their reservations, which can exceed actual billed charges. Pause and window close interrupt waits, and the UI displays the next attempt without blocking navigation.
+
 History scans show volume and illustrative estimates before the user approves a USD limit. Live processing is opt-in with per-sync and daily limits. The app reserves a conservative input/output cost estimate before sending a request and settles it after a response. Price constants have a recorded verification date; the provider's billing dashboard remains the billing authority. This release does not fetch prices dynamically or claim estimates equal final invoices.
 
 Separate import and reader pools keep network processing and live database snapshots outside the GUI event loop. Progress has its own throttled signal; cached QML getters avoid credential-store/database calls. A 2,610-message test plan with 408 applications and 103 reviews verifies navigation, search, expansion, and Pause while both background workers are deliberately blocked.
@@ -63,6 +65,7 @@ Separate import and reader pools keep network processing and live database snaps
 | --- | --- |
 | API contract, strict schema, output cap, no tools, rejected evidence, usage settlement | [test_credentials_ai.py](../tests/test_credentials_ai.py) |
 | Deduplication, confidence/matching, pauses, budget enforcement, retries | [test_worker.py](../tests/test_worker.py) |
+| Transient recovery, Retry-After, rate versus quota, per-dispatch reservations, cached stages, actual SDK mocked HTTP responses | [test_ai_retries.py](../tests/test_ai_retries.py) |
 | Oldest-first processing across accounts and resumed jobs | [test_chronological_import.py](../tests/test_chronological_import.py) |
 | Confirmation dates, status projection, unmatched updates, review recovery | [test_tracking_updates.py](../tests/test_tracking_updates.py), [test_scan_recovery.py](../tests/test_scan_recovery.py) |
 | GUI thread boundaries, blocked refresh, progress queue bounds, restart recovery | [test_import_responsiveness.py](../tests/test_import_responsiveness.py) |

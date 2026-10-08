@@ -9,9 +9,12 @@ from PySide6.QtQml import QQmlApplicationEngine
 from PySide6.QtQuickControls2 import QQuickStyle
 from PySide6.QtTest import QTest
 from sqlalchemy import select
+from test_ai_retries import api_error
+from test_worker import FakeAnalyzer, FakeMailbox
 
 from job_tracker.credentials import Credentials
 from job_tracker.db import Account, Application, Job, Message, Review, Scan
+from job_tracker.email import register
 from job_tracker.ui.bridge import Bridge, Work
 
 
@@ -275,3 +278,62 @@ def test_ui_properties_never_read_sqlite_or_credential_store(qapp, tracker, monk
         assert bridge.microsoftClient == ""
     finally:
         bridge.stop()
+
+
+def test_retry_backoff_keeps_gui_interactive_and_pause_interrupts_wait(
+    qapp, qtbot, tracker, monkeypatch
+):
+    class UnavailableAnalyzer(FakeAnalyzer):
+        dispatches = 0
+
+        def classify(self, message, bill):
+            bill("classify", "gpt-6-luna", 0.01)
+            type(self).dispatches += 1
+            raise api_error()
+
+    vault = Credentials()
+    vault.memory.update({"openai": "synthetic-key", "mailbox": "synthetic-token"})
+    vault.get = lambda name: vault.memory.get(name, "")
+    register(tracker, "gmail", "candidate@example.org", "mailbox")
+    bridge = Bridge(tracker, vault, onboarding=False)
+    bridge.timer.stop()
+    bridge.importer.analyzer_factory = UnavailableAnalyzer
+    bridge.importer.mailbox_factory = FakeMailbox
+    plan = bridge.importer.preview("2026-09-01T00:00:00Z", "2026-11-01T00:00:00Z")
+    bridge._scan_plan = plan | {"search_id": bridge.selectedSearch}
+    monkeypatch.setattr("job_tracker.worker.retry_delay", lambda _error, _attempt: 30)
+    QQuickStyle.setStyle("Basic")
+    engine = QQmlApplicationEngine()
+    engine.rootContext().setContextProperty("backend", bridge)
+    engine.load(QUrl.fromLocalFile(str(Path(__file__).parents[1] / "src/job_tracker/ui/Main.qml")))
+    window = engine.rootObjects()[0]
+
+    def walk(item):
+        yield item
+        for child in item.childItems():
+            yield from walk(child)
+
+    def click(item):
+        point = item.mapToScene(QPointF(item.width() / 2, item.height() / 2)).toPoint()
+        QTest.mouseClick(window, Qt.LeftButton, Qt.NoModifier, point)
+
+    try:
+        qtbot.wait(80)
+        bridge.startHistory(1)
+        qtbot.waitUntil(lambda: "Retrying OpenAI classification" in bridge.message, timeout=3000)
+        assert bridge.busy and UnavailableAnalyzer.dispatches == 1
+        # A real 30-second worker wait must not block navigation or Pause input.
+        click(
+            next(item for item in walk(window.contentItem()) if item.objectName() == "navigation-1")
+        )
+        qtbot.waitUntil(lambda: window.property("page") == 1)
+        click(window.findChild(QObject, "pauseScanButton"))
+        qtbot.waitUntil(lambda: not bridge.busy, timeout=2000)
+        assert UnavailableAnalyzer.dispatches == 1 and bridge.importer.cancelled.is_set()
+        assert "paused" in bridge.message and "0.0100" in bridge.message
+    finally:
+        bridge.importer.cancelled.set()
+        window.close()
+        bridge.stop()
+        engine.deleteLater()
+        qapp.processEvents()
