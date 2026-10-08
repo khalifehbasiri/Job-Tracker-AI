@@ -5,6 +5,17 @@ is outside its scope. A release must ship reviewable changes, passing tests,
 matching library sources/notices, verified assets, and clear setup/limits. Renaming
 a preview does not establish production reliability or measured AI accuracy.
 
+## v0.2.3 temporary AI error recovery
+
+- [x] Explicit bounded retries distinguish temporary API failures/rate limits from invalid keys, quota failures, ambiguous 429s, and invalid AI results.
+- [x] Every dispatch reserves budget independently; failed requests without usage receipts keep conservative reservations. Completed stages and records are reused.
+- [x] Real Qt navigation/Pause remains responsive during a retry wait; cancellation interrupts that wait without another dispatch.
+- [x] All 137 source tests and lint/format checks pass locally, including mocked HTTP through the real OpenAI SDK. No live mailbox or paid AI requests used.
+- [ ] Clean Windows release build, empty first launch/privacy checks, and v0.2.2 → v0.2.3 installer upgrade/shortcut/uninstall checks.
+- [ ] Downloaded assets verified against checksums and privacy inspection before publication as latest.
+
+Real-account/model availability and billing validation limits below remain applicable.
+
 ## v0.2.1 close-button fix
 
 - [x] X/Alt+F4 accept window close and use the normal Qt application shutdown path.

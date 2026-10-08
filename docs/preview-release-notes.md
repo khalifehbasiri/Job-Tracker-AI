@@ -1,4 +1,28 @@
-# Job Tracker AI v0.2.2 — clean-start privacy checks
+# Job Tracker AI v0.2.3 — automatic AI recovery
+
+## Changed in v0.2.3
+
+Imports now recover automatically from temporary OpenAI failures, including HTTP
+503, connection failures/timeouts, and explicit rate limits. Classification and
+extraction each allow up to four attempts with increasing waits and jitter.
+Provider Retry-After delays are respected up to two minutes per wait. The banner
+shows the upcoming attempt, the dashboard stays usable, and Pause interrupts
+the wait immediately.
+
+Each attempt reserves budget before dispatch; the app never increases your
+spending limit automatically. Completed AI stages stay cached, so extraction
+retries do not repeat successful classification. Failed requests without usage
+receipts keep conservative reservations; recorded usage/reservations may exceed
+actual charges shown in OpenAI's billing dashboard.
+
+Persistent failures, longer provider waits, invalid keys, quota problems, and
+spending limits still pause safely. Resume later after fixing the cause. Existing
+records, imports, and credentials are preserved during the update. Successful
+resumed jobs clear their previous error messages.
+
+All 137 source tests pass, including mocked HTTP through the actual OpenAI SDK
+and Qt interaction during a retry wait. No real mailbox or paid API calls were
+used for these tests.
 
 ## Changed in v0.2.2
 

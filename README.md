@@ -157,7 +157,7 @@ flowchart LR
 
 ## Run on Windows
 
-**v0.2.2 · Self-configured edition** — Windows x64, with user-owned email OAuth and OpenAI credentials.
+**v0.2.3 · Self-configured edition** — Windows x64, with user-owned email OAuth and OpenAI credentials.
 
 - [Download the Windows installer](https://github.com/khalifehbasiri/Job-Tracker-AI/releases/latest/download/Job-Tracker-AI-Setup.exe).
 - [Download the portable ZIP](https://github.com/khalifehbasiri/Job-Tracker-AI/releases/latest/download/Job-Tracker-AI-Windows-x64.zip).
