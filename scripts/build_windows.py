@@ -25,9 +25,16 @@ def dependency_notices():
     inventory = []
     for dist in sorted(importlib.metadata.distributions(), key=lambda d: d.metadata["Name"]):
         name = dist.metadata["Name"]
-        inventory.append(f"{name} {dist.version}")
+        version = (
+            tomllib.loads((ROOT / "pyproject.toml").read_text())["project"]["version"]
+            if name.lower().replace("_", "-") == "job-tracker-ai"
+            else dist.version
+        )
+        inventory.append(f"{name} {version}")
         for file in dist.files or []:
-            if any(word in file.name.lower() for word in ("license", "copying", "notice")):
+            if any(
+                word in str(file).lower() for word in ("license", "licence", "copying", "notice")
+            ):
                 source = Path(dist.locate_file(file))
                 if source.is_file():
                     destination = target / name / str(file).replace("../", "")
@@ -35,6 +42,14 @@ def dependency_notices():
                     shutil.copyfile(source, destination)
     (target / "INVENTORY.txt").write_text("\n".join(inventory) + "\n", encoding="utf-8")
     shutil.copyfile(ROOT / "packaging/third-party-notices.md", target / "README.md")
+    shutil.copytree(ROOT / "build/source-notices", target / "upstream", dirs_exist_ok=True)
+    shutil.copyfile(
+        ROOT / "build/dependency-sources/SOURCE-MANIFEST.json", target / "SOURCE-MANIFEST.json"
+    )
+    python_license = Path(sys.base_prefix) / "LICENSE.txt"
+    if not python_license.is_file():
+        raise RuntimeError("The bundled Python runtime license is missing")
+    shutil.copyfile(python_license, target / "PYTHON-LICENSE.txt")
 
 
 def smoke(bundle):
@@ -90,9 +105,39 @@ def smoke(bundle):
     assert (bundle / "_internal/job_tracker/ui/qmldir").exists()
     if list(bundle.rglob("google_desktop_oauth.json")):
         raise RuntimeError("OAuth configuration must not be bundled in the preview.")
-    for unused in ("Qt6WebEngineCore.dll", "Qt6VirtualKeyboard.dll", "Qt6Charts.dll"):
+    for unused in (
+        "Qt6WebEngineCore.dll",
+        "Qt6VirtualKeyboard.dll",
+        "Qt6Charts.dll",
+        "Qt6Pdf.dll",
+        "Qt6Quick3DUtils.dll",
+    ):
         if list(bundle.rglob(unused)):
             raise RuntimeError(f"Unused Qt component was bundled: {unused}")
+    allowed_qt = {
+        "Qt6Core.dll",
+        "Qt6Gui.dll",
+        "Qt6Network.dll",
+        "Qt6OpenGL.dll",
+        "Qt6Widgets.dll",
+        "Qt6Svg.dll",
+        "Qt6Qml.dll",
+        "Qt6QmlMeta.dll",
+        "Qt6QmlModels.dll",
+        "Qt6QmlWorkerScript.dll",
+        "Qt6Quick.dll",
+        "Qt6QuickLayouts.dll",
+        "Qt6QuickTemplates2.dll",
+        "Qt6QuickControls2.dll",
+        "Qt6QuickControls2Impl.dll",
+        "Qt6QuickControls2Basic.dll",
+        "Qt6QuickControls2BasicStyleImpl.dll",
+    }
+    if any(path.name not in allowed_qt for path in bundle.rglob("Qt6*.dll")):
+        raise RuntimeError("An unreviewed Qt module was bundled; update the source/license audit.")
+    notices = bundle / "_internal/THIRD_PARTY_NOTICES"
+    if not list(notices.rglob("LGPL-3.0-only.txt")) or not list(notices.rglob("GPL-3.0-only.txt")):
+        raise RuntimeError("Required Qt license texts are missing")
 
 
 def main():
@@ -108,6 +153,7 @@ def main():
         if tag != f"v{version}" and not tag.startswith(f"v{version}-"):
             raise SystemExit("Release tag must match the version in pyproject.toml.")
     run(sys.executable, "scripts/build_help.py")
+    run(sys.executable, "scripts/prepare_dependency_sources.py")
     dependency_notices()
     # Other desktop tools may put incompatible DLLs (for example Poppler's ICU)
     # on PATH. Qt uses Windows' ICU; dependency discovery must prefer System32.
@@ -142,7 +188,11 @@ def main():
         root_dir=bundle.parent,
         base_dir=bundle.name,
     )
-    outputs = [release / "Job-Tracker-AI-Windows-x64.zip"]
+    sources = release / "Job-Tracker-AI-Dependency-Sources.zip"
+    shutil.copyfile(ROOT / "build/dependency-sources" / sources.name, sources)
+    guide = release / "Job-Tracker-AI-Setup-Guide.html"
+    shutil.copyfile(ROOT / "src/job_tracker/help/setup.html", guide)
+    outputs = [release / "Job-Tracker-AI-Windows-x64.zip", sources, guide]
     if args.installer:
         compiler = args.iscc or Path("C:/Program Files (x86)/Inno Setup 6/ISCC.exe")
         if not compiler.exists():

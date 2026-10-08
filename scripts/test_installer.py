@@ -1,5 +1,6 @@
 """Exercise an installer only when there is no existing registered installation."""
 
+import argparse
 import os
 import sqlite3
 import subprocess
@@ -10,6 +11,10 @@ ROOT = Path(__file__).resolve().parents[1]
 
 
 def main():
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--previous-installer", type=Path)
+    parser.add_argument("--check-shortcuts", action="store_true")
+    args = parser.parse_args()
     if sys.platform != "win32":
         raise SystemExit("This check requires Windows.")
     import winreg
@@ -30,14 +35,14 @@ def main():
     database = target.parent / "retained.sqlite3"
     installer = ROOT / "dist/release/Job-Tracker-AI-Setup.exe"
 
-    def install():
+    def install(package=installer):
         subprocess.run(
             [
-                str(installer),
+                str(package),
                 "/VERYSILENT",
                 "/SUPPRESSMSGBOXES",
                 "/NORESTART",
-                "/NOICONS",
+                *([] if args.check_shortcuts else ["/NOICONS"]),
                 f"/DIR={target}",
                 f"/LOG={target.parent / 'install.log'}",
             ],
@@ -63,13 +68,21 @@ def main():
         )
         assert image.exists() and image.stat().st_size > 1000
 
-    install()
+    install(args.previous_installer or installer)
     try:
         assert (target / "Job-Tracker-AI.exe").exists()
         launch()
         with sqlite3.connect(database) as connection:
             connection.execute("UPDATE applications SET notes = 'upgrade-preservation-marker'")
         install()
+        guide = target / "Setup guide/setup.html"
+        assert guide.is_file() and "F1" in guide.read_text(encoding="utf-8")
+        if args.check_shortcuts:
+            shortcuts = (
+                Path(os.environ["APPDATA"]) / "Microsoft/Windows/Start Menu/Programs/Job Tracker AI"
+            )
+            assert (shortcuts / "Job Tracker AI.lnk").exists()
+            assert (shortcuts / "Job Tracker AI setup guide.lnk").exists()
         launch()
         with sqlite3.connect(database) as connection:
             assert connection.execute("SELECT count(*) FROM applications").fetchone()[0] == 5
@@ -88,7 +101,8 @@ def main():
         )
     assert database.exists()
     assert not (target / "Job-Tracker-AI.exe").exists()
-    print("Install, same-version upgrade, launch, and uninstall passed; records preserved.")
+    upgrade = "cross-version" if args.previous_installer else "same-version"
+    print(f"Install, {upgrade} upgrade, launch, and uninstall passed; records preserved.")
 
 
 if __name__ == "__main__":

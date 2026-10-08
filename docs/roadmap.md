@@ -1,6 +1,6 @@
 # Release milestones
 
-## Implemented for the development preview
+## Implemented for v0.2.0 — user-owned credentials
 
 Desktop dashboard, named searches, SQLite migrations, manual editing, Excel import/export, constrained AI extraction, review inbox, resumable oldest-first history scans, budgets, and tray polling.
 
@@ -8,11 +8,11 @@ Editable search metadata; confident unmatched job-update records; confirmation-o
 
 The welcome wizard and offline guide cover user-owned Google/Microsoft OAuth registrations, OpenAI keys, search creation, and opt-in processing. Gmail/Outlook/all-mailboxes selection controls new scans and polling. Safe connection diagnostics, reconnect/disconnect, masked inputs, OS credential storage, and session-only mode are implemented.
 
-Windows packaging uses a PyInstaller folder bundle and Inno Setup per-user installer. Builds produce a portable ZIP, installer, checksums, dependency notices, and a frozen-app demo smoke test. GitHub Actions uploads build artifacts and creates draft prereleases for version tags. No project-owned OAuth credentials are bundled.
+Windows packaging uses a PyInstaller folder bundle and Inno Setup per-user installer. Builds produce a portable ZIP, installer, standalone HTML guide, matching dependency sources, checksums, dependency notices, and frozen-app smoke checks. GitHub Actions tests cross-version upgrades and shortcuts, uploads artifacts, and creates draft releases for version tags. No project-owned OAuth credentials are bundled.
 
-## Before publishing preview downloads
+## Release gates
 
-Follow [the release checklist](release-checklist.md): complete clean-runner packaging, isolated install/upgrade/uninstall validation, corresponding-source/licensing review, and consenting real-account tests. The source repository can remain public while these checks are pending.
+Follow [the release checklist](release-checklist.md). Automated packaging, source/notices, installation, upgrade, and record-preservation checks gate binary publication. Real-account compatibility and model-quality evidence must be described accurately; fixture tests do not establish either. Shared OAuth onboarding is outside the self-configured release's scope.
 
 ## Before ordinary-user production onboarding
 
@@ -22,7 +22,7 @@ Follow [the release checklist](release-checklist.md): complete clean-runner pack
 - Calibrate classification thresholds and identity matching using redacted labelled examples.
 - Prepare project-owned public OAuth, including Google restricted-scope review/security assessment and a domain-verifiable homepage/privacy site. Microsoft publisher verification helps organizational adoption but is not a universal requirement for personal Outlook access. See [public OAuth preparation](public-oauth.md).
 - Configure supported model/pricing updates and improve scheduling, timezone display, and review corrections.
-- Obtain a code-signing certificate and sign Windows releases. Preview binaries are unsigned.
+- Obtain a code-signing certificate and sign Windows releases. Current binaries are unsigned.
 
 ## Later possibilities
 

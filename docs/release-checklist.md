@@ -1,4 +1,9 @@
-# Preview release checklist
+# Release quality gates — v0.2.0 self-configured edition
+
+This release supports user-owned OAuth registrations. Project-owned verification
+is outside its scope. A release must ship reviewable changes, passing tests,
+matching library sources/notices, verified assets, and clear setup/limits. Renaming
+a preview does not establish production reliability or measured AI accuracy.
 
 ## Implemented
 
@@ -22,15 +27,19 @@
 - Only the QML modules used by the app are packaged; unused browser, virtual-keyboard, and charts binaries are rejected by the smoke check.
 - ZIP, installer, SHA-256 checksums, and tag-triggered draft release automation.
 
-## Validate before publishing a preview download
+## Validate before publishing v0.2.0
 
-- [x] Windows preview workflow built on GitHub's clean runner.
-- [x] Automated isolated install, same-version upgrade, launch, and uninstall passed on the Windows runner; fictional records survived.
-- [ ] Human validation of shortcuts, a future cross-version upgrade, and a fresh Windows user profile.
+- [ ] Windows release workflow built on GitHub's clean runner for the tagged version.
+- [ ] Isolated install, v0.1.0 → v0.2.0 upgrade, app/guide shortcuts, launch, and uninstall passed; fictional records survived.
+- [x] Module restrictions exclude unused PDF/3D/debugger components; matching Qt/PySide/certifi source packaging and license-text checks are implemented. Binary checks must pass too.
 - [ ] Confirm email credentials survive restart, reconnect, and disconnect with a consenting Gmail account and a personal Outlook mailbox.
 - [ ] Confirm both real AI endpoints work for a newly created OpenAI project, using consenting data and an explicit spending limit.
-- [ ] Review notices and corresponding-source distribution requirements for every bundled Qt module; source pointers alone are not a completed licensing audit.
 - [ ] Check installer version matches the tag; review generated assets and release notes, then publish the draft.
+
+Automated fake-response tests validate integration behavior. Consenting real-account
+checks above remain separate evidence and must not be represented as completed.
+The published release discloses that limit, provider public-beta API access,
+unsigned binaries, user-owned registrations, and the absence of measured accuracy.
 
 ## Remaining for an ordinary-user production launch
 
@@ -42,5 +51,6 @@
 - Configurable supported models/pricing, classifier/matching calibration, and timezone improvements.
 - Windows code signing certificate and signing workflow. Preview binaries are unsigned.
 
-The source repository can be public while these items remain. A preview release
-must disclose its limits; it is not a claim of provider approval or production readiness.
+Shared one-click onboarding is not a requirement for the user-owned credential
+edition. Production quality is assessed from actual validation and disclosed
+scope, not a label. Future changes must preserve these gates.

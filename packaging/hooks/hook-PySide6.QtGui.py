@@ -1,4 +1,4 @@
-"""Use native desktop input; the optional virtual keyboard is not used by this app."""
+"""Exclude optional input and PDF image plugins that this desktop does not use."""
 
 from pathlib import Path
 
@@ -6,5 +6,7 @@ from PyInstaller.utils.hooks.qt import add_qt6_dependencies
 
 hiddenimports, binaries, datas = add_qt6_dependencies(__file__)
 binaries = [
-    entry for entry in binaries if Path(entry[0]).name.lower() != "qtvirtualkeyboardplugin.dll"
+    entry
+    for entry in binaries
+    if Path(entry[0]).name.lower() not in {"qtvirtualkeyboardplugin.dll", "qpdf.dll"}
 ]

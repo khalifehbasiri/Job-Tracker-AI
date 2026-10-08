@@ -1,4 +1,4 @@
-name: Windows preview build
+name: Windows release build
 
 on:
   workflow_dispatch:
@@ -7,6 +7,7 @@ on:
 
 permissions:
   contents: read
+  actions: read
 
 jobs:
   build:
@@ -39,16 +40,20 @@ jobs:
           }
       - name: Build portable app, smoke-test, and create installer
         run: uv run python scripts/build_windows.py --installer
-      - name: Test isolated install, upgrade, and uninstall
-        run: uv run python scripts/test_installer.py
+      - name: Download previous validated installer for upgrade coverage
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh run download 37715824397 --name Windows-preview-downloads --dir artifacts/previous-downloads
+      - name: Test isolated install, cross-version upgrade, shortcuts, and uninstall
+        run: uv run python scripts/test_installer.py --previous-installer artifacts/previous-downloads/Job-Tracker-AI-Setup.exe --check-shortcuts
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
-          name: Windows-preview-downloads
+          name: Windows-release-downloads
           path: dist/release/*
           if-no-files-found: error
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
-          name: Windows-preview-validation
+          name: Windows-release-validation
           path: |
             artifacts/frozen-smoke/*
             artifacts/installer-smoke/*.png
@@ -64,14 +69,14 @@ jobs:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
       - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
         with:
-          name: Windows-preview-downloads
+          name: Windows-release-downloads
           path: downloads
-      - name: Create a draft preview release for review
+      - name: Create a draft self-configured release for review
         env:
           GH_TOKEN: ${{ github.token }}
           RELEASE_TAG: ${{ github.ref_name }}
         shell: pwsh
         run: |
           $files = Get-ChildItem -LiteralPath downloads -File | ForEach-Object FullName
-          gh release create $env:RELEASE_TAG @files --verify-tag --draft --prerelease --title "Job Tracker AI $env:RELEASE_TAG — development preview" --notes-file docs/preview-release-notes.md
+          gh release create $env:RELEASE_TAG @files --verify-tag --draft --title "Job Tracker AI $env:RELEASE_TAG — self-configured edition" --notes-file docs/preview-release-notes.md
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
