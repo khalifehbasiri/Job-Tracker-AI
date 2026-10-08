@@ -29,12 +29,14 @@ a preview does not establish production reliability or measured AI accuracy.
 
 ## Validate before publishing v0.2.0
 
-- [ ] Windows release workflow built on GitHub's clean runner for the tagged version.
-- [ ] Isolated install, v0.1.0 → v0.2.0 upgrade, app/guide shortcuts, launch, and uninstall passed; fictional records survived.
+- [x] Windows release workflow built on GitHub's clean runner; the release tag points to the validated commit.
+- [x] Isolated install, v0.1.0 → v0.2.0 upgrade, app/guide shortcuts, launch, and uninstall passed; fictional records survived.
 - [x] Module restrictions exclude unused PDF/3D/debugger components; matching Qt/PySide/certifi source packaging and license-text checks are implemented. Binary checks must pass too.
 - [ ] Confirm email credentials survive restart, reconnect, and disconnect with a consenting Gmail account and a personal Outlook mailbox.
 - [ ] Confirm both real AI endpoints work for a newly created OpenAI project, using consenting data and an explicit spending limit.
-- [ ] Check installer version matches the tag; review generated assets and release notes, then publish the draft.
+- [x] Installer version matches the tag; uploaded binary/source/guide hashes and source manifests verified; release notes reviewed and v0.2.0 published.
+
+Evidence: [87-test Windows/Linux checks](https://github.com/khalifehbasiri/Job-Tracker-AI/actions/runs/37718025342), [clean-runner build and cross-version installer checks](https://github.com/khalifehbasiri/Job-Tracker-AI/actions/runs/37718024782), and [v0.2.0 release assets](https://github.com/khalifehbasiri/Job-Tracker-AI/releases/tag/v0.2.0). The installer, portable ZIP, offline HTML guide, and corresponding-source ZIP were downloaded from the draft and verified against its checksum file before publication.
 
 Automated fake-response tests validate integration behavior. Consenting real-account
 checks above remain separate evidence and must not be represented as completed.
