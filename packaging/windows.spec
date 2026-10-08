@@ -4,6 +4,7 @@ from pathlib import Path
 root = Path(SPECPATH).parent
 data = [
     (str(root / 'src/job_tracker/ui'), 'job_tracker/ui'),
+    (str(root / 'src/job_tracker/assets'), 'job_tracker/assets'),
     (str(root / 'src/job_tracker/migrations'), 'job_tracker/migrations'),
     (str(root / 'src/job_tracker/help'), 'job_tracker/help'),
     (str(root / 'build/notices'), 'THIRD_PARTY_NOTICES'),
@@ -23,6 +24,7 @@ a = Analysis(
 )
 pyz = PYZ(a.pure)
 exe = EXE(pyz, a.scripts, [], exclude_binaries=True, name='Job-Tracker-AI',
+          icon=str(root / 'src/job_tracker/assets/logo.ico'),
           debug=False, bootloader_ignore_signals=False, strip=False, upx=False,
           console=False, disable_windowed_traceback=False)
 coll = COLLECT(exe, a.binaries, a.datas, strip=False, upx=False, name='Job-Tracker-AI')

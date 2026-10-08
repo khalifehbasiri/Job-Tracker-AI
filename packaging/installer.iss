@@ -25,6 +25,7 @@ AppMutex=Local\JobTrackerAI.Desktop
 CloseApplications=no
 RestartApplications=no
 UninstallDisplayIcon={app}\Job-Tracker-AI.exe
+SetupIconFile=..\src\job_tracker\assets\logo.ico
 SetupLogging=yes
 
 [Tasks]

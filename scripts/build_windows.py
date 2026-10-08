@@ -71,6 +71,8 @@ def smoke(bundle):
             str(settings),
             "--screenshot-page",
             "4",
+            "--theme",
+            "dark",
         ],
         cwd=artifacts,
         timeout=60,
@@ -83,6 +85,9 @@ def smoke(bundle):
         assert connection.execute("SELECT count(*) FROM email_accounts").fetchone()[0] == 0
         assert connection.execute("PRAGMA integrity_check").fetchone()[0] == "ok"
     assert (bundle / "_internal/job_tracker/help/setup.html").exists()
+    assert (bundle / "_internal/job_tracker/assets/logo.png").exists()
+    assert (bundle / "_internal/job_tracker/ui/Theme.qml").exists()
+    assert (bundle / "_internal/job_tracker/ui/qmldir").exists()
     if list(bundle.rglob("google_desktop_oauth.json")):
         raise RuntimeError("OAuth configuration must not be bundled in the preview.")
     for unused in ("Qt6WebEngineCore.dll", "Qt6VirtualKeyboard.dll", "Qt6Charts.dll"):
