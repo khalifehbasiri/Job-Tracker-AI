@@ -15,6 +15,11 @@ Choose Gmail, Outlook, or all mailboxes for new history scans and automatic
 processing. Existing job records remain visible. Automatic processing is off by
 default; connecting email does not start AI processing.
 
+Historical imports now keep navigation, local search, review expansion, and Pause
+responsive. Database refreshes and timelines run in a separate background worker;
+progress no longer rebuilds the entire interface. Interrupted imports offer
+Resume after restarting, preserving completed records and recorded usage.
+
 AI sends selected email text to OpenAI and uses your API credits. Manual tracking
 and Excel import/export have no API costs. Records stay in local, unencrypted
 SQLite. Uninstalling preserves the database and OS credentials.

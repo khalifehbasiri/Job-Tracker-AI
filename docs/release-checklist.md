@@ -12,6 +12,8 @@
 - Oldest-first imports, review recovery, resumable scans, Excel snapshots.
 - Application dates from confirmation emails, local repair of missing confirmation dates, and confident unmatched update records.
 - Collapsed/searchable review inbox with expansion preserved during refresh.
+- Separate import/read workers, cached QML properties, throttled progress, and virtualized review cards; navigation/search/Pause tested with a 2,610-email plan and blocked background reads.
+- Interrupted imports become paused on restart without changing records or automatically spending API credits.
 - Editable search metadata, removable import-history entries preserving records/usage, and completed-import Resume suppression.
 - Saved light/dark theme, contextual help, in-app credential setup summary, and generated app/installer logo.
 - Excel Stage/Outcome/Completed dropdowns covering existing and future rows.

@@ -4,6 +4,10 @@
 
 Python 3.13, PySide6 with Qt Quick/QML, SQLite through SQLAlchemy, Alembic migrations, Pydantic validation, openpyxl import/export, and OS-backed keyring credentials. The GUI runs on the main thread; serialized background jobs run outside it. Network calls never hold database transactions open.
 
+Imports and AI requests use one serialized worker pool. A separate reader pool loads live database snapshots and application timelines, so reads cannot block the Qt event loop or wait behind an entire import. Refresh requests are coalesced, and stale snapshots are discarded after local edits. QML getters use cached records, settings, and credential-presence flags; they never query SQLite or the OS keyring. Progress uses its own signal, throttled to at most ten updates per second, and unchanged record models are not invalidated. Review cards are virtualized, with full text and application choices populated on expansion. Navigation, local search, theme selection, and Pause remain available while importing; record mutations remain disabled until the import stops.
+
+After acquiring the exclusive database lock at startup, interrupted running scans become paused and offer Resume. This preserves records, staged jobs, cached classifications, and usage reservations without automatically starting another paid scan.
+
 Data is stored in the platform's local application-data directory, outside the checkout and cloud-sync folders. SQLite enables foreign keys, WAL, and a busy timeout. The desktop holds an OS file lock for its database so a second desktop cannot make competing AI requests. The live database is not synchronized through OneDrive; SQLite backup snapshots and Excel exports may be.
 
 ## Job searches
