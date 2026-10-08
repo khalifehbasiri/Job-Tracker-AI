@@ -25,7 +25,9 @@ hide the window when closed.
 - [x] Every reachable Git object checked after removing historic personal OAuth identifiers and replacing commit emails with GitHub no-reply addresses; main and release tags rewritten.
 - [x] Existing v0.2.0/v0.2.1 public bundles inspected, including compiled first-party modules: no personal identifiers, database, or credential files found.
 - [x] Packaging rejects private data/configuration and checks frozen normal first launch separately from fictional demo mode; all 103 source tests and lint/format checks pass locally.
-- [ ] Clean Windows release/upgrade checks and downloaded asset verification before publication.
+- [x] Clean Windows release/upgrade checks and downloaded asset verification; v0.2.2 published as latest after hash checks and privacy inspection of the ZIP/compiled first-party modules.
+
+Evidence: [103-test Windows/Linux checks](https://github.com/khalifehbasiri/Job-Tracker-AI/actions/runs/37721529197), [normal-first-launch/privacy and Windows installer validation](https://github.com/khalifehbasiri/Job-Tracker-AI/actions/runs/37721529065), and [v0.2.2 downloads](https://github.com/khalifehbasiri/Job-Tracker-AI/releases/tag/v0.2.2).
 
 The Git rewrite cleans normal repository history and source archives, not copies
 already downloaded or GitHub's retained, unreferenced objects. Removing those
