@@ -28,6 +28,10 @@ Import from email history supports 1, 3, 6, and 12 months plus custom dates, sel
 
 Settings offers masked OpenAI key entry, save/test/remove, and optional session-only storage. Never write secrets to SQLite, logs, exports, or Git. No secure credential backend means session-only operation. Manual records, dashboards, and Excel import/export require no API key. Email and AI require network connectivity.
 
+Large OAuth caches are split into bounded entries in the same trusted OS keyring so they fit Windows Credential Manager's 2,560-byte credential blob limit. A versioned manifest is published after all pieces are written and verifies their assembled hash when read. Existing single-entry credentials remain compatible. Replacement removes old pieces; disconnect and switching to session-only storage remove the manifest and its pieces. Failed writes preserve the previous credential and roll back newly created pieces. No plaintext file fallback is used.
+
+The Microsoft browser callback says only that a sign-in response was received. Token exchange, profile/mailbox access, and secure credential saving finish afterward; Settings reports the outcome and stage-specific safe errors.
+
 ## Reliability and release scope
 
 Incremental Git commits group coherent changes. Tests cover search isolation, matching, duplicate and delayed events, retries, budget enforcement, credential handling, and exports. API tests use fixtures and fakes: development does not spend a user's credits or read their inbox. Start with preview/review for uncertain changes and calibrate thresholds against labelled email samples.

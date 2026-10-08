@@ -1,3 +1,4 @@
+import json
 from types import SimpleNamespace
 
 import httpx
@@ -34,7 +35,13 @@ def test_native_google_config_excludes_user_tokens_and_pins_endpoints():
 
 @pytest.mark.parametrize("mailbox_status", [200, 403, 404])
 def test_outlook_only_registers_after_mailbox_access_succeeds(tracker, monkeypatch, mailbox_status):
-    app = SimpleNamespace(acquire_token_interactive=lambda **kwargs: {"access_token": "fake"})
+    calls = []
+
+    def authenticate(**kwargs):
+        calls.append(kwargs)
+        return {"access_token": "fake"}
+
+    app = SimpleNamespace(acquire_token_interactive=authenticate)
     cache = SimpleNamespace(serialize=lambda: "fake-cache")
     monkeypatch.setattr("job_tracker.email.microsoft_app", lambda _id: (app, cache))
     client_type = httpx.Client
@@ -58,6 +65,61 @@ def test_outlook_only_registers_after_mailbox_access_succeeds(tracker, monkeypat
             connect_outlook(tracker, vault, MICROSOFT_CLIENT_ID, False)
         assert "PRIVATE" not in str(caught.value)
         assert not tracker.accounts() and not vault.memory
+    assert "response received" in calls[0]["success_template"]
+    assert "Authentication complete" not in calls[0]["success_template"]
+    assert "$code" not in calls[0]["success_template"]
+    assert "$state" not in calls[0]["success_template"]
+
+
+def test_outlook_storage_failure_reports_correct_stage_without_private_details(
+    tracker, monkeypatch
+):
+    app = SimpleNamespace(acquire_token_interactive=lambda **kwargs: {"access_token": "fake"})
+    cache = SimpleNamespace(serialize=lambda: "fake-cache")
+    monkeypatch.setattr("job_tracker.email.microsoft_app", lambda _id: (app, cache))
+    client_type = httpx.Client
+    monkeypatch.setattr(
+        "job_tracker.email.httpx.Client",
+        lambda **kwargs: client_type(
+            transport=httpx.MockTransport(
+                lambda _request: httpx.Response(200, json={"mail": "test@outlook.example"})
+            ),
+            **kwargs,
+        ),
+    )
+    vault = Credentials()
+    vault.backend = lambda: None
+    vault.save = lambda *args: (_ for _ in ()).throw(ValueError("PRIVATE-token-and-error"))
+    with pytest.raises(UserFacingError, match="mailbox access succeeded") as caught:
+        connect_outlook(tracker, vault, MICROSOFT_CLIENT_ID, True)
+    assert "PRIVATE" not in str(caught.value)
+    assert "Session only" in str(caught.value)
+    assert not tracker.accounts()
+
+
+def test_outlook_persistent_connection_handles_large_token_cache(tracker, monkeypatch):
+    from test_large_credentials import SizeLimitedBackend, vault_using
+
+    serialized = "synthetic-Microsoft-cache" * 1000
+    app = SimpleNamespace(acquire_token_interactive=lambda **kwargs: {"access_token": "fake"})
+    cache = SimpleNamespace(serialize=lambda: serialized)
+    monkeypatch.setattr("job_tracker.email.microsoft_app", lambda _id: (app, cache))
+    client_type = httpx.Client
+    monkeypatch.setattr(
+        "job_tracker.email.httpx.Client",
+        lambda **kwargs: client_type(
+            transport=httpx.MockTransport(
+                lambda _request: httpx.Response(200, json={"mail": "test@outlook.example"})
+            ),
+            **kwargs,
+        ),
+    )
+    backend = SizeLimitedBackend()
+    assert connect_outlook(tracker, vault_using(backend), MICROSOFT_CLIENT_ID, True)
+    account = tracker.accounts()[0]
+    stored = json.loads(vault_using(backend).get(account["credential_ref"]))
+    assert stored["cache"] == serialized and stored["_persist"] is True
+    assert account["provider"] == "outlook"
 
 
 def test_connection_success_refreshes_settings_and_failure_stays_visible(qapp, qtbot, tracker):

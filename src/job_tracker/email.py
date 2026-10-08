@@ -25,6 +25,14 @@ from job_tracker.services import Tracker
 
 GMAIL_SCOPE = "https://www.googleapis.com/auth/gmail.readonly"
 GRAPH_SCOPES = ["https://graph.microsoft.com/Mail.Read", "https://graph.microsoft.com/User.Read"]
+MICROSOFT_CALLBACK_PAGE = (
+    "<!doctype html><html><head><meta charset='utf-8'><title>Job Tracker AI</title></head>"
+    "<body><h2>Microsoft sign-in response received</h2>"
+    "<p>Return to Job Tracker AI. The app is finishing sign-in, checking mailbox access, "
+    "and saving your connection.</p>"
+    "<p>Your mailbox is connected only when it appears as connected in the app's Settings.</p>"
+    "<p>You can close this tab. Do not share sign-in codes or tokens.</p></body></html>"
+)
 
 
 def read_request(client, url, **kwargs):
@@ -147,7 +155,15 @@ def connect_outlook(tracker: Tracker, vault: Credentials, client_id: str, persis
 
     UUID(client_id)  # Public installed-app registration; never an application secret.
     app, cache = microsoft_app(client_id)
-    result = app.acquire_token_interactive(scopes=GRAPH_SCOPES, timeout=180)
+    try:
+        result = app.acquire_token_interactive(
+            scopes=GRAPH_SCOPES, timeout=180, success_template=MICROSOFT_CALLBACK_PAGE
+        )
+    except ValueError as error:
+        raise UserFacingError(
+            "The Microsoft sign-in response could not be validated. "
+            "Close old sign-in tabs and reconnect Outlook in a new browser flow."
+        ) from error
     if "access_token" not in result:
         code = result.get("error")
         messages = {
@@ -175,7 +191,13 @@ def connect_outlook(tracker: Tracker, vault: Credentials, client_id: str, persis
             headers={"Authorization": f"Bearer {result['access_token']}"},
         )
         response.raise_for_status()
-        profile = response.json()
+        try:
+            profile = response.json()
+        except ValueError as error:
+            raise UserFacingError(
+                "Microsoft sign-in completed, but its profile response could not be read. "
+                "Check your connection and retry."
+            ) from error
         address = profile.get("mail") or profile.get("userPrincipalName")
         if not address:
             raise UserFacingError(
@@ -195,7 +217,15 @@ def connect_outlook(tracker: Tracker, vault: Credentials, client_id: str, persis
             )
         mailbox.raise_for_status()
     reference = "outlook-" + uuid4().hex
-    vault.save(reference, json.dumps({"cache": cache.serialize(), "_persist": persist}), persist)
+    try:
+        vault.save(
+            reference, json.dumps({"cache": cache.serialize(), "_persist": persist}), persist
+        )
+    except ValueError as error:
+        raise UserFacingError(
+            "Microsoft sign-in and mailbox access succeeded, but credentials could not be saved "
+            "securely. Try Session only or check OS credential-store access."
+        ) from error
     register(tracker, "outlook", address, reference, client_id)
     return address
 

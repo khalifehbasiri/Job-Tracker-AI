@@ -8,6 +8,8 @@ SQLite stores searches, applications, event history, tasks, mailbox addresses, p
 
 API keys and OAuth token caches are stored separately in a supported OS credential store. Session-only credentials remain in process memory. Replacing a saved API key with a session-only key removes the previous saved key when secure storage is available. Credentials are excluded from database backups and workbook exports. Original OAuth client JSON stays outside the repository. Distributed builds can include maintained public desktop-client registration metadata; this never includes a user's access token, refresh token, or OpenAI key. Advanced Google client overrides use the credential store or session memory.
 
+Large credentials may occupy several encrypted entries in the OS credential store to fit its size limits. Their small manifest contains only assembly metadata, and all pieces remain in the credential store. Disconnecting removes the associated manifest and pieces. The app does not fall back to plaintext token files.
+
 ## Email access and AI transmission
 
 Mailbox permissions are read-only. The app does not send, delete, or mark messages as read. It reads message IDs and, when processing a scan, the sender, subject, timestamps, thread identity, and body. It skips Gmail attachments and never follows email links or executes attachment content. Normalization strips HTML/script markup and common quoted reply chains, then limits body length.
