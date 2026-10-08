@@ -37,4 +37,5 @@ def test_release_allows_code_and_public_dependencies(tmp_path):
     (tmp_path / "setup.html").write_text("Users supply their own OpenAI API key.")
     (tmp_path / "SOURCE-MANIFEST.json").write_text('{"sources": [{"name": "Qt"}]}')
     (tmp_path / "cacert.pem").write_text("Public certificate authority bundle")
+    (tmp_path / "_spdx.py").write_text("'asterisk-linking-protocols-exception'")
     module.assert_no_private_data(tmp_path)

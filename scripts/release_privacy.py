@@ -4,7 +4,7 @@ import json
 import re
 from pathlib import Path
 
-SECRET = re.compile(rb"sk-(?:proj-|svcacct-)?[A-Za-z0-9_-]{20,}")
+SECRET = re.compile(rb"(?<![A-Za-z0-9_-])sk-(?:proj-|svcacct-)?[A-Za-z0-9_-]{20,}")
 PRIVATE_NAMES = {
     ".env",
     "credentials.json",
