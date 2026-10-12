@@ -58,6 +58,7 @@ Prompts and schemas are committed alongside tests. Classification results retain
 
 - Separate named job searches, with editable names/dates, archiving, and application moves between searches. Every search has its own Excel export.
 - Dashboard, company/role search, stage filtering, editable applications, notes, event timelines, and upcoming tasks.
+- Filter redundant confirmations and explicit routine notices for the same application within a fixed 20-minute window. Preserve status changes and required actions; retain email dates and audit links. Application details and Excel show first/latest email timestamps.
 - Excel column-mapping preview and duplicate detection. Export Applications, Events, Tasks, and Search sheets with dropdowns for Stage, Outcome, and task Completed fields. Import/export costs no API credits.
 - First-run setup wizard, offline step-by-step guide, and read-only Gmail/Outlook browser sign-in using your own OAuth registration. Select Gmail, Outlook, or all mailboxes for new scans and automatic processing.
 - GPT-6 Luna Decisions classifies application confirmations, rejections, assessments, interviews, offers, and other updates; GPT-5.4 mini extracts structured facts and dates with evidence. Clear unmatched updates can create records automatically. Uncertain matches go to a collapsed, expandable review inbox with full-text search.
@@ -108,9 +109,10 @@ For a quick technical review, start with [the model API integration and prompts]
 
 | Engineering area | Concrete implementation |
 | --- | --- |
-| AI integration | A two-stage pipeline uses GPT-6 Luna **Decisions** for relevance/event classification and GPT-5.4 mini **Responses** with a strict JSON schema for extraction. Pydantic validates fields and dates; evidence must be an exact excerpt from the supplied body. |
+| AI integration | A two-stage pipeline uses GPT-6 Luna **Decisions** for relevance/event classification and GPT-5.4 mini **Responses** with a strict JSON schema for extraction. Pydantic validates fields and dates; formatting-equivalent evidence maps to an exact excerpt from the original body. |
 | Decision handling | Relevance below 0.1 skips extraction. Automatic updates require relevance and event confidence of at least 0.9 plus a clear identity. Otherwise a review item explains why a human decision is needed. Thresholds are defaults, not measured accuracy guarantees. |
-| Application matching | Thread history and requisition IDs precede company/role matching. Weaker matches stay within the selected search. Conflicting IDs and multiple matches cannot silently merge records. |
+| Review recovery | Recheck saved emails locally without AI charges. Explicit event wording can recover evidence failures when scores, source identity, and matching checks pass; unproven dates are dropped. See the [complete email decision logic](docs/email-decision-logic.md). |
+| Application matching | Thread history and requisition IDs precede company/title matching; a job ID is optional. Unique formatting-normalized company/title matches handle legal suffixes and common title abbreviations within the selected search. Conflicting IDs and multiple matches cannot silently merge records. |
 | Persistence | SQLAlchemy models separate searches, accounts, messages, jobs, applications, events, tasks, scans, reviews, and usage. SQLite foreign keys/unique constraints protect relationships; Alembic upgrades preserve existing data. |
 | Reliability | Durable jobs survive pauses/restarts. Cached classifications and extractions avoid repeating completed AI work. Normalized timestamps prevent older emails from overwriting newer status; manual status corrections are protected. |
 | Desktop design | Qt Quick/QML handles presentation; separate import and snapshot workers, cached getters, throttled progress signals, and virtualized review cards keep the interface usable during imports. Record mutations remain disabled while a scan runs. |

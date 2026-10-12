@@ -21,8 +21,9 @@ from job_tracker.worker import Importer
         ("offer", "Offer", "Active"),
     ],
 )
+@pytest.mark.parametrize("from_review", [False, True], ids=["new-import", "saved-review"])
 def test_unmatched_updates_create_records_without_inventing_applied_dates(
-    tracker, kind, stage, outcome
+    tracker, kind, stage, outcome, from_review
 ):
     search = tracker.create_search("2026")
     register(tracker, "gmail", "candidate@example.org", "fake")
@@ -35,7 +36,7 @@ def test_unmatched_updates_create_records_without_inventing_applied_dates(
             "company": "OCLC",
             "role": "Software Engineer - Canada",
             "applied_on": "2026-09-20",
-            "evidence": "Fictional evidence",
+            "evidence": "Fictional update",
         },
     }
     importer = Importer(tracker, None)
@@ -56,11 +57,27 @@ def test_unmatched_updates_create_records_without_inventing_applied_dates(
         session.add(job)
         session.flush()
         job_id = job.id
-    importer.process(job_id, None)  # Cached results must not call AI again.
+        if from_review:
+            job.state = "review"
+            session.add(
+                Review(
+                    job_id=job.id,
+                    search_id=search,
+                    proposed_json=json.dumps(result),
+                    reason="No exact application match.",
+                )
+            )
+    if from_review:
+        assert importer.reprocess_reviews(search) == {"applied": 1, "remaining": 0}
+        assert importer.reprocess_reviews(search) == {"applied": 0, "remaining": 0}
+    else:
+        importer.process(job_id, None)  # Cached results must not call AI again.
+    assert len(tracker.applications(search)) == 1
     app = tracker.applications(search)[0]
     assert (app["stage"], app["outcome"]) == (stage, outcome)
     assert app["applied_on"] == ("2026-09-20" if kind == "application" else "")
     assert not tracker.reviews(search)
+    assert [event["kind"] for event in tracker.events(app["id"])] == [kind]
     # An earlier confirmation fills a blank date without undoing the later rejection.
     with tracker.db.sessions.begin() as session:
         message = Message(

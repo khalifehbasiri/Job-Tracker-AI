@@ -282,9 +282,11 @@ ApplicationWindow {
                             Layout.fillWidth: true
                             Field { id: reviewFilter; objectName: "reviewFilter"; placeholderText: "Search subject, sender, company, role, or email text…"; Layout.fillWidth: true }
                             HelpTip { explanation: "Uncertain classifications and ambiguous matches stay here. Expand an email to link, create, or ignore a record. Search includes the full email body." }
+                            ActionButton { objectName: "reprocessReviews"; text: "Recheck saved emails"; enabled: !backend.busy && backend.reviews.length > 0; onClicked: backend.reprocessReviews() }
                             ActionButton { text: "Collapse all"; onClicked: root.expandedReviews = [] }
                         }
                         PlainLabel { text: root.filteredReviews.length + " of " + backend.reviews.length + " emails · Click an email to expand it."; color: Theme.muted }
+                        PlainLabel { text: "Recheck uses saved email text to apply clear updates automatically, with no API charges."; wrapMode: Text.WordWrap; Layout.fillWidth: true; color: Theme.muted }
                         PlainLabel { visible: backend.reviews.length === 0; text: "All clear. Emails that need a second look will appear here."; color: Theme.muted; Layout.topMargin: 50 }
                         PlainLabel { visible: backend.reviews.length > 0 && root.filteredReviews.length === 0; text: "No emails match your search."; color: Theme.muted }
                         ListView {
@@ -371,7 +373,7 @@ ApplicationWindow {
                                         Layout.fillWidth: true
                                         PlainLabel { text: modelData.start_at.slice(0, 10) + " → " + modelData.end_at.slice(0, 10); font.bold: true; color: Theme.text }
                                         PlainLabel { text: modelData.state + " · estimated usage / reservations $" + modelData.spent.toFixed(4) + " USD"; color: Theme.muted }
-                                        PlainLabel { text: modelData.processed + " processed · " + modelData.review_count + " for review · " + modelData.pending + " waiting · " + modelData.failed + " failed · " + modelData.unavailable + " unavailable"; wrapMode: Text.WordWrap; Layout.fillWidth: true; color: Theme.muted }
+                                        PlainLabel { text: modelData.processed + " processed (" + modelData.filtered + " redundant filtered) · " + modelData.review_count + " for review · " + modelData.pending + " waiting · " + modelData.failed + " failed · " + modelData.unavailable + " unavailable"; wrapMode: Text.WordWrap; Layout.fillWidth: true; color: Theme.muted }
                                         PlainLabel { visible: modelData.error.length > 0; text: modelData.error; wrapMode: Text.WordWrap; Layout.fillWidth: true; color: Theme.warning }
                                     }
                                     Field { id: resumeBudget; text: modelData.budget.toString(); Layout.preferredWidth: 80; placeholderText: "Budget USD"; visible: modelData.state !== "completed" && modelData.state !== "running" }
@@ -679,6 +681,11 @@ ApplicationWindow {
                     ComboBox { id: stage; model: ["Applied", "Assessment", "Interview", "Offer"]; Layout.fillWidth: true }
                     ComboBox { id: outcome; model: ["Active", "Rejected", "Withdrawn", "Accepted", "Closed"]; Layout.fillWidth: true }
                     HelpTip { explanation: "Stage tracks progress (Applied → Offer). Outcome tracks whether the application is active or ended. For example, an interview rejection keeps stage Interview and sets outcome Rejected." }
+                }
+                PlainLabel {
+                    visible: !!root.selectedApp.first_email_at
+                    text: "First email: " + (root.selectedApp.first_email_at || "").slice(0, 19).replace("T", " ") + " UTC\nLatest email: " + (root.selectedApp.last_email_at || "").slice(0, 19).replace("T", " ") + " UTC"
+                    color: Theme.muted; wrapMode: Text.WordWrap; Layout.fillWidth: true
                 }
                 TextArea { id: notes; placeholderText: "Your notes"; wrapMode: Text.WordWrap; Layout.fillWidth: true; Layout.preferredHeight: 100 }
                 PlainLabel { text: "Changing the status manually protects it from automatic email updates."; color: Theme.muted; wrapMode: Text.WordWrap; Layout.fillWidth: true; font.pixelSize: 12 }

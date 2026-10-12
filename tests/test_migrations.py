@@ -55,6 +55,48 @@ def test_upgrade_preserves_paused_scan_and_search(tmp_path):
             """),
                 {"id": application_id, "kind": kind},
             )
+        connection.execute(
+            text("""
+            INSERT INTO email_accounts
+            (id, provider, address, credential_ref, client_id, last_sync)
+            VALUES (1, 'gmail', 'candidate@example.org', '', '', '')
+        """)
+        )
+        for message_id, received in [
+            (1, "2026-09-21T23:00:00-04:00"),
+            (2, "2026-09-20T14:00:00+02:00"),
+        ]:
+            connection.execute(
+                text("""
+                INSERT INTO email_messages
+                (id, account_id, provider_id, thread_id, sender, subject, body, received_at,
+                 state, result_json)
+                VALUES (:id, 1, :provider, '', 'jobs@example.org', 'Update', 'Body', :received,
+                        'processed', '{}')
+            """),
+                {"id": message_id, "provider": str(message_id), "received": received},
+            )
+            connection.execute(
+                text("""
+                INSERT INTO application_events
+                (application_id, message_id, kind, evidence, effective_at, created_at)
+                VALUES (2, :id, 'rejection', '', :received, '2026-10-01T00:00:00Z')
+            """),
+                {"id": message_id, "received": received},
+            )
+        connection.execute(
+            text("""
+            INSERT INTO processing_jobs
+            (id, message_id, search_id, scan_id, state, retry_at, error, attempts)
+            VALUES (1, 1, 1, 1, 'review', '', '', 1)
+        """)
+        )
+        connection.execute(
+            text("""
+            INSERT INTO review_items (job_id, search_id, proposed_json, reason, state)
+            VALUES (1, 1, '{}', 'Uncertain', 'pending')
+        """)
+        )
     engine.dispose()
     db = Database(path)
     try:
@@ -70,5 +112,17 @@ def test_upgrade_preserves_paused_scan_and_search(tmp_path):
                 session.execute(text("select name from job_searches where id=1")).scalar()
                 == "Existing search"
             )
+            assert session.execute(
+                text("""
+                SELECT first_email_at, last_email_at FROM applications WHERE id=2
+            """)
+            ).one() == ("2026-09-20T12:00:00+00:00", "2026-09-22T03:00:00+00:00")
+            assert session.execute(
+                text("""
+                SELECT first_email_at, last_email_at FROM applications WHERE id=1
+            """)
+            ).one() == ("", "")
+            assert session.execute(text("SELECT state FROM review_items")).scalar() == "pending"
+            assert session.execute(text("PRAGMA foreign_key_check")).all() == []
     finally:
         db.close()

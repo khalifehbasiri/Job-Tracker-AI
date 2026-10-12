@@ -3,7 +3,61 @@ import base64
 import httpx
 import pytest
 
-from job_tracker.email import Mailbox
+from job_tracker.email import Mailbox, select_body
+
+
+def test_html_supplies_rejection_missing_from_plaintext_footer():
+    plain = (
+        "Your update from Acme\nThis email was intended for Candidate\nhttps://tracking.example/"
+    )
+    html = (
+        "<p>Your application to Software Engineer at Acme</p>"
+        "<p>Thank you for applying. Unfortunately, we will not be moving forward "
+        "with your application at this time.</p>"
+        "<p>This email was intended for Candidate</p>"
+        "<script>secret script content</script>"
+    )
+    body = select_body([plain], [html])
+    assert "Unfortunately" in body
+    assert "Software Engineer" in body
+    assert "<p>" not in body and "secret script content" not in body
+
+
+def test_full_plaintext_is_preferred_over_equivalent_html():
+    plain = "We received your application for Engineer at Acme. Thank you for applying."
+    assert select_body([plain], [f"<p>{plain}</p>"]) == plain
+
+
+def test_short_plaintext_is_not_replaced_by_html_tracking_footer():
+    plain = "We received your application."
+    html = (
+        "<p>We received your application.</p><p>This email was intended for Candidate</p>"
+        "<p>"
+        + "<a href='https://example.org'>Unsubscribe from all our promotional emails</a>" * 20
+        + "</p>"
+    )
+    assert select_body([plain], [html]) == plain
+
+
+def test_gmail_decodes_declared_charset(monkeypatch):
+    def handle(request):
+        text = "Nous avons reçu votre candidature."
+        return httpx.Response(
+            200,
+            json={
+                "internalDate": "1790856000000",
+                "payload": {
+                    "mimeType": "text/plain",
+                    "headers": [
+                        {"name": "Content-Type", "value": "text/plain; charset=iso-8859-1"}
+                    ],
+                    "body": {"data": base64.urlsafe_b64encode(text.encode("iso-8859-1")).decode()},
+                },
+            },
+        )
+
+    mailbox = adapter(monkeypatch, "gmail", handle)
+    assert mailbox.get("one").body == "Nous avons reçu votre candidature."
 
 
 def adapter(monkeypatch, provider, handle):

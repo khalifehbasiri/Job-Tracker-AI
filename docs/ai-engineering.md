@@ -8,7 +8,7 @@ Job Tracker AI integrates two model APIs into a durable desktop workflow. This d
 2. The worker orders messages by received time across accounts. Duplicate identities reuse saved results rather than repeating completed inference.
 3. `Analyzer.classify()` sends the JSON email payload to OpenAI's Decisions endpoint. Two named questions return a relevance probability and an event choice/confidence. Event choices are application, rejection, assessment, interview, offer, and other.
 4. Relevance below 0.1 skips extraction. Potential application messages use `Analyzer.extract()` with GPT-5.4 mini through Responses and a strict JSON schema derived from the `Extraction` Pydantic model.
-5. Python validates the extracted fields and checks the exact evidence excerpt against the original body. The worker checks confidence and matches application identity before applying an event.
+5. Python validates extracted fields and maps evidence to a contiguous excerpt in the original body, tolerating whitespace, HTML-entity, and quote formatting. The worker checks confidence and matches application identity before applying an event.
 6. Clear supported updates append an event and project application status. Uncertain outputs create a review item. The dashboard shows persisted results and Excel exports remain editable snapshots.
 
 The [Decisions guide](https://developers.openai.com/api/docs/guides/decisions) documents predicate and choice answers. The [Structured Outputs guide](https://developers.openai.com/api/docs/guides/structured-outputs) describes schema-constrained responses. Decisions is currently a provider public-beta dependency; account access and API behavior can change independently of this desktop release.
@@ -32,7 +32,7 @@ The distinction is architectural: classification asks for a bounded decision; ex
 - **Event definitions:** each choice has a short definition. Classification focuses on the latest message rather than earlier quoted messages.
 - **Missing information:** extraction returns null instead of inferring absent facts. An interview invitation is not evidence an interview happened.
 - **Dates:** an explicitly stated application date is separate from the email received timestamp. Deadline/interview values require a stated date, time, and timezone.
-- **Grounding:** evidence must be a short exact body excerpt. An unsupported excerpt is rejected by Python even if the JSON schema is valid. An exact excerpt does not prove every extracted field is correct.
+- **Grounding:** evidence must map to a short contiguous body excerpt. Unsupported excerpts are rejected even if the JSON schema is valid; failed excerpts are retained for diagnostics. An exact excerpt does not prove every extracted field is correct.
 - **Untrusted input:** the instructions explicitly treat email as data. The application enforces a narrow capability boundary: no model tools, sending, deleting, link navigation, or arbitrary execution.
 
 For example, the extraction instruction says:
@@ -43,11 +43,17 @@ This is application-owned prompt text. The hard boundary comes from capability r
 
 ## Confidence, matching, and human review
 
-Automatic updates require relevance and event confidence of at least 0.9, supported extraction, and an unambiguous identity. These are configured decision rules, not calibrated accuracy guarantees. Thread-linked history and requisition IDs precede weaker company/role matching. Conflicting IDs and multiple candidates cannot silently merge records.
+Automatic updates require relevance and event confidence of at least 0.9, supported extraction, and an unambiguous identity. These are configured decision rules, not calibrated accuracy guarantees. Thread-linked history and requisition IDs precede company/title matching within the selected search. An ID is optional: exact matches precede a unique match after conservative formatting normalization. Conflicting IDs and multiple candidates cannot silently merge records.
 
 A confident unmatched rejection with company and role creates an `Applied / Rejected` record with an unknown application date. Only confirmation events may fill a blank applied date. An explicitly extracted date takes precedence; otherwise the app uses the confirmation's received date in UTC. The fallback can differ from the original form-submission date. Older events cannot overwrite newer status, and manual status overrides remain protected.
 
 Refusals, incomplete/invalid extractions, unsupported evidence, and ambiguous identities enter review. The human can link, create, or ignore an application. Review proposals are not automatically trusted facts. This is a human-in-the-loop workflow with inspectable source text and reasons for abstention.
+
+Evidence failures have a limited local recovery path: explicit event wording in the latest body,
+source-supported identity fields, both scores at least 0.9, and normal matching checks. Dates from
+the rejected extraction are dropped. **Recheck saved emails** applies eligible cached reviews without
+paid inference. Refusals, invalid outputs, ambiguous identities, and unsupported event types remain
+in review. See [the complete decision rules](email-decision-logic.md).
 
 ## Reliability and inference costs
 

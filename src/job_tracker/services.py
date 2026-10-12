@@ -212,8 +212,16 @@ class Tracker:
         with sqlite3.connect(self.db.path) as source, sqlite3.connect(destination) as target:
             source.backup(target)
 
+    def record_email_dates(self, app: Application, message: Message):
+        received = timestamp(message.received_at)
+        if not app.first_email_at or received < app.first_email_at:
+            app.first_email_at = received
+        if not app.last_email_at or received > app.last_email_at:
+            app.last_email_at = received
+
     def add_event(self, session, app: Application, message: Message, result: dict):
         kind = EventType(result["kind"])
+        self.record_email_dates(app, message)
         existing = session.scalar(
             select(ApplicationEvent).where(
                 ApplicationEvent.application_id == app.id,

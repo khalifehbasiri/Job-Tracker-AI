@@ -21,6 +21,16 @@ class MemoryBackend:
         del self.values[name]
 
 
+def test_test_vault_isolated_from_os_storage(isolated_credential_store):
+    vault = Credentials()
+    vault.save("openai", "synthetic-persistent-key")
+    assert Credentials().get("openai") == "synthetic-persistent-key"
+    vault.save("openai", "synthetic-session-key", persist=False)
+    assert vault.get("openai") == "synthetic-session-key"
+    assert Credentials().get("openai") == ""
+    assert isolated_credential_store.values == {}
+
+
 def test_session_only_does_not_write_key_store(monkeypatch):
     vault = Credentials()
     backend = MemoryBackend()

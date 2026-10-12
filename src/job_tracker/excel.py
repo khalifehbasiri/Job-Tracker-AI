@@ -11,8 +11,28 @@ from openpyxl.worksheet.table import Table, TableStyleInfo
 from job_tracker.domain import ApplicationInput, Outcome, Stage
 from job_tracker.services import Tracker
 
-HEADERS = ["Company", "Role", "Applied on", "Stage", "Outcome", "Requisition ID", "Notes"]
-FIELDS = ["company", "role", "applied_on", "stage", "outcome", "requisition_id", "notes"]
+HEADERS = [
+    "Company",
+    "Role",
+    "Applied on",
+    "Stage",
+    "Outcome",
+    "Requisition ID",
+    "Notes",
+    "First email UTC",
+    "Latest email UTC",
+]
+FIELDS = [
+    "company",
+    "role",
+    "applied_on",
+    "stage",
+    "outcome",
+    "requisition_id",
+    "notes",
+    "first_email_at",
+    "last_email_at",
+]
 
 
 def sheet(workbook, name: str, headers: list[str], rows: list[list]):

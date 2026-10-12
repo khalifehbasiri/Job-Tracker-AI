@@ -7,6 +7,7 @@ from pydantic import ValidationError
 
 from job_tracker.domain import Extraction
 from job_tracker.errors import ReviewRequired, UserFacingError
+from job_tracker.evidence import EVIDENCE_REVIEW, source_excerpt
 
 DECISION_MODEL = "gpt-6-luna"
 EXTRACTION_MODEL = "gpt-5.4-mini"
@@ -20,7 +21,8 @@ INSTRUCTIONS = (
     "company/role/requisition ID or dates. applied_on must be explicitly stated as YYYY-MM-DD; "
     "received_at is NOT the application date. Only extract deadline_at/interview_at when date, "
     "time and timezone are explicit; use ISO8601 with offset, otherwise null. An invitation is "
-    "not evidence of completion. evidence must be a short exact excerpt from the supplied body."
+    "not evidence of completion. evidence must be one short contiguous excerpt from the "
+    "supplied body. Do not paraphrase, add ellipses, or join separate excerpts."
 )
 QUESTIONS = [
     {
@@ -141,10 +143,11 @@ class Analyzer:
                 "AI returned fields or dates that could not be validated. "
                 "Review the email manually."
             ) from error
-        if not extracted.evidence.strip() or extracted.evidence not in message.body:
-            fields = extracted.model_dump() | {"evidence": ""}
+        evidence = source_excerpt(message.body, extracted.evidence)
+        if not evidence:
+            fields = extracted.model_dump()
             raise ReviewRequired(
-                "AI evidence did not match the email text. Confirm the proposed fields manually.",
+                EVIDENCE_REVIEW,
                 fields,
             )
-        return extracted.model_dump()
+        return extracted.model_dump() | {"evidence": evidence}

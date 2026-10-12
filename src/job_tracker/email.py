@@ -4,7 +4,9 @@ import base64
 import json
 import re
 import time
+from contextlib import nullcontext
 from dataclasses import dataclass
+from email.message import Message as MimeHeaders
 from html.parser import HTMLParser
 from urllib.parse import quote
 from uuid import uuid4
@@ -80,6 +82,30 @@ def normalize(body: str, html: bool = False) -> str:
     # Keep original message evidence but drop quoted reply chains and common signatures.
     body = re.split(r"(?m)^On .{1,200}wrote:\s*$|^-----Original Message-----|^-- \s*$", body)[0]
     return re.sub(r"\n{3,}", "\n\n", body).strip()[:16000]
+
+
+def informative_words(body: str) -> int:
+    """Count readable content before common mail footers, excluding tracking URLs."""
+    core = re.split(
+        r"(?im)^\s*(?:This email was intended for|Learn why we included this|"
+        r"Unsubscribe|Privacy policy|Copyright|\u00a9)",
+        body,
+        maxsplit=1,
+    )[0]
+    core = re.sub(r"https?://\S+", "", core)
+    return len(re.findall(r"\b\w+\b", core))
+
+
+def select_body(plain: list[str], html: list[str]) -> str:
+    """Prefer plain text except when its HTML alternative supplies missing content."""
+    plain_body = normalize("\n".join(plain))
+    html_body = normalize("\n".join(html), html=True)
+    if not plain_body:
+        return html_body
+    plain_words, html_words = informative_words(plain_body), informative_words(html_body)
+    if html_body and plain_words <= 20 and html_words >= plain_words + 10:
+        return html_body
+    return plain_body
 
 
 @dataclass
@@ -231,8 +257,9 @@ def connect_outlook(tracker: Tracker, vault: Credentials, client_id: str, persis
 
 
 class Mailbox:
-    def __init__(self, account: dict, vault: Credentials):
+    def __init__(self, account: dict, vault: Credentials, client: httpx.Client | None = None):
         self.account, self.vault = account, vault
+        self.client = client
 
     def headers(self) -> dict:
         info = json.loads(self.vault.get(self.account["credential_ref"]) or "{}")
@@ -354,7 +381,9 @@ class Mailbox:
 
     def get(self, provider_id: str) -> Email:
         headers = self.headers()
-        with httpx.Client(timeout=30) as client:
+        with (
+            nullcontext(self.client) if self.client is not None else httpx.Client(timeout=30)
+        ) as client:
             if self.account["provider"] == "gmail":
                 response = read_request(
                     client,
@@ -378,7 +407,15 @@ class Mailbox:
                     if value and part.get("mimeType") in ("text/plain", "text/html"):
                         content = base64.urlsafe_b64decode(value + "=" * (-len(value) % 4))
                         target = plain if part["mimeType"] == "text/plain" else html
-                        target.append(content.decode("utf-8", errors="replace"))
+                        mime_headers = MimeHeaders()
+                        for header in part.get("headers") or []:
+                            if (header.get("name") or "").lower() == "content-type":
+                                mime_headers["Content-Type"] = header.get("value") or ""
+                        charset = mime_headers.get_content_charset() or "utf-8"
+                        try:
+                            target.append(content.decode(charset, errors="replace"))
+                        except LookupError:
+                            target.append(content.decode("utf-8", errors="replace"))
                     for nested in part.get("parts") or []:
                         decode(nested)
 
@@ -391,7 +428,7 @@ class Mailbox:
                     data.get("threadId", ""),
                     meta.get("from", "")[:300],
                     meta.get("subject", "")[:300],
-                    normalize("\n".join(plain or html), html=not plain),
+                    select_body(plain, html),
                     timestamp(received),
                 )
             response = read_request(

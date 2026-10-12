@@ -12,6 +12,7 @@ from job_tracker.ai import RATES, Analyzer, estimated_cost
 from job_tracker.db import Account, Application, ApplicationEvent, Job, Message, Review, Scan, Usage
 from job_tracker.domain import ApplicationInput, now, timestamp
 from job_tracker.email import Mailbox
+from job_tracker.email_filter import redundant_email
 from job_tracker.errors import (
     AutoRetryExhausted,
     ReviewRequired,
@@ -19,6 +20,8 @@ from job_tracker.errors import (
     blocks_scan,
     describe_error,
 )
+from job_tracker.evidence import EVIDENCE_REVIEW, recover_event_evidence, source_excerpt
+from job_tracker.matching import company_key, formatted_identity, role_key
 from job_tracker.retries import MAX_AI_ATTEMPTS, retry_delay, transient_ai_error
 from job_tracker.services import Tracker, record
 
@@ -46,6 +49,38 @@ def can_create_unmatched(result: dict, reason: str) -> bool:
     )
 
 
+def reusable_review_result(
+    session, message: Message, result: dict, search_id: int, prior_reason=""
+):
+    """Reconsider saved proposals only when all automatic-update checks now pass."""
+    if not confident_classification(result) or result.get("kind") is None:
+        return None
+    app, reason = match_application(session, message, result.get("extraction") or {}, search_id)
+    if not (
+        "conflict" in prior_reason or "multiple" in prior_reason.casefold()
+    ) and redundant_email(session, message, result, search_id, app, reason):
+        return result
+    if result.get("kind") == "other":
+        return None
+    if result.get("review_reason") == EVIDENCE_REVIEW:
+        result = recover_event_evidence(message, result)
+        if result is None:
+            return None
+    elif result.get("review_reason"):
+        return None
+    else:
+        evidence = source_excerpt(
+            message.body, (result.get("extraction") or {}).get("evidence", "")
+        )
+        if not evidence:
+            return None
+        result = result | {"extraction": result["extraction"] | {"evidence": evidence}}
+    app, reason = match_application(session, message, result["extraction"], search_id)
+    if not app and ("conflicts" in prior_reason or "multiple" in prior_reason.casefold()):
+        return None  # A previous identity conflict needs a unique match, not a new record.
+    return result if app or can_create_unmatched(result, reason) else None
+
+
 def match_application(session, message: Message, extraction: dict, search_id: int):
     """Exact thread/ID matches cross years; weaker company/role matches stay search-scoped."""
     if message.thread_id:
@@ -70,16 +105,24 @@ def match_application(session, message: Message, extraction: dict, search_id: in
             return app, ""
         if len(ids) > 1:
             return None, "This email thread contains multiple applications."
-    company = (extraction.get("company") or "").casefold()
-    role = (extraction.get("role") or "").casefold()
-    requisition = (extraction.get("requisition_id") or "").casefold()
+    company = formatted_identity(extraction.get("company"))
+    role = formatted_identity(extraction.get("role"))
+    requisition = formatted_identity(extraction.get("requisition_id"))
     apps = list(session.scalars(select(Application)))
     if company and requisition:
         matches = [
             app
             for app in apps
-            if app.company.casefold() == company and app.requisition_id.casefold() == requisition
+            if formatted_identity(app.company) == company
+            and formatted_identity(app.requisition_id) == requisition
         ]
+        if not matches:
+            matches = [
+                app
+                for app in apps
+                if company_key(app.company) == company_key(company)
+                and formatted_identity(app.requisition_id) == requisition
+            ]
         if len(matches) == 1:
             return matches[0], ""
         if len(matches) > 1:
@@ -90,14 +133,22 @@ def match_application(session, message: Message, extraction: dict, search_id: in
         if app.search_id == search_id
         and company
         and role
-        and app.company.casefold() == company
-        and app.role.casefold() == role
+        and formatted_identity(app.company) == company
+        and formatted_identity(app.role) == role
     ]
+    if not matches and company and role:
+        matches = [
+            app
+            for app in apps
+            if app.search_id == search_id
+            and company_key(app.company) == company_key(company)
+            and role_key(app.role) == role_key(role)
+        ]
     if len(matches) == 1:
         if (
             requisition
             and matches[0].requisition_id
-            and (matches[0].requisition_id.casefold() != requisition)
+            and (formatted_identity(matches[0].requisition_id) != requisition)
         ):
             return None, "The requisition ID conflicts with the matching company and role."
         return matches[0], ""
@@ -237,13 +288,19 @@ class Importer:
             elif job.state == "review":
                 review = session.scalar(select(Review).where(Review.job_id == job.id))
                 cached = json.loads(message.result_json or "{}")
-                evidence = (cached.get("extraction") or {}).get("evidence") or ""
                 if (
                     review is not None
                     and review.state == "pending"
-                    and can_create_unmatched(cached, review.reason)
-                    and evidence.strip()
-                    and evidence in message.body
+                    and (
+                        reusable_review_result(session, message, cached, search_id, review.reason)
+                        is not None
+                        or (
+                            can_create_unmatched(cached, review.reason)
+                            and source_excerpt(
+                                message.body, (cached.get("extraction") or {}).get("evidence", "")
+                            )
+                        )
+                    )
                 ):
                     # A user-started overlapping scan can apply the improved matching
                     # rule to clear old reviews using saved results, with no AI retry.
@@ -294,9 +351,20 @@ class Importer:
             result = json.loads(message.result_json or "{}")
             account = record(session.get(Account, message.account_id))
 
-        if result.get("review_reason"):
-            self.require_review(job_id, result, result["review_reason"])
+        if self.filter_redundant(job_id, result):
             return
+        if result.get("review_reason"):
+            repaired = (
+                recover_event_evidence(message, result)
+                if result["review_reason"] == EVIDENCE_REVIEW and confident_classification(result)
+                else None
+            )
+            if repaired is None:
+                self.require_review(job_id, result, result["review_reason"])
+                return
+            result = repaired
+            with self.tracker.db.sessions.begin() as session:
+                session.get(Message, message.id).result_json = json.dumps(result)
         if (
             job.error
             == "The record or provider response could not be validated. Check setup or retry."
@@ -343,13 +411,38 @@ class Importer:
             with self.tracker.db.sessions.begin() as session:
                 session.get(Message, message.id).result_json = json.dumps(result)
         if result["probability"] >= 0.1 and "extraction" not in result:
-            result["extraction"] = self.retry_ai(
-                lambda: analyzer.extract(message, bill), "extraction", progress
-            )
+            try:
+                result["extraction"] = self.retry_ai(
+                    lambda: analyzer.extract(message, bill), "extraction", progress
+                )
+            except ReviewRequired as error:
+                repaired = (
+                    recover_event_evidence(message, result | {"extraction": error.extraction})
+                    if str(error) == EVIDENCE_REVIEW and confident_classification(result)
+                    else None
+                )
+                if repaired is None:
+                    candidate = result | {
+                        "extraction": error.extraction,
+                        "review_reason": str(error),
+                    }
+                    if self.filter_redundant(job_id, candidate):
+                        return
+                    raise
+                result = repaired
             with self.tracker.db.sessions.begin() as session:
                 session.get(Message, message.id).result_json = json.dumps(result)
+        if self.filter_redundant(job_id, result):
+            return
+        if result["probability"] >= 0.1:
+            evidence = source_excerpt(message.body, result["extraction"].get("evidence") or "")
+            if not evidence:
+                self.require_review(job_id, result, EVIDENCE_REVIEW)
+                return
+            result["extraction"]["evidence"] = evidence
         with self.tracker.db.sessions.begin() as session:
             job = session.get(Job, job_id)
+            session.get(Message, message.id).result_json = json.dumps(result)
             job.error, job.retry_at = "", ""
             if result["probability"] < 0.1:
                 job.state = "done"
@@ -386,9 +479,45 @@ class Importer:
                     )
                     session.add(review)
                 review.proposed_json = json.dumps(result)
-                review.reason = reason or "The classification needs your confirmation."
+                blockers = []
+                if not confident:
+                    blockers.append("Relevance and event confidence must both be at least 90%.")
+                if result["kind"] == "other":
+                    blockers.append("This email has no supported application event type.")
+                if reason:
+                    blockers.append(reason)
+                if not app:
+                    for field in ("company", "role"):
+                        if not extraction.get(field):
+                            blockers.append(f"The email does not identify the {field}.")
+                review.reason = " ".join(blockers)
                 job.state = "review"
             session.get(Message, message.id).state = "processed"
+
+    def filter_redundant(self, job_id: int, result: dict) -> bool:
+        with self.tracker.db.sessions.begin() as session:
+            job = session.get(Job, job_id)
+            message = session.get(Message, job.message_id)
+            app, reason = match_application(
+                session, message, result.get("extraction") or {}, job.search_id
+            )
+            review = session.scalar(select(Review).where(Review.job_id == job_id))
+            if review and ("conflict" in review.reason or "multiple" in review.reason.casefold()):
+                return False
+            decision = redundant_email(session, message, result, job.search_id, app, reason)
+            if decision is None:
+                return False
+            app = session.get(Application, decision.application_id)
+            self.tracker.record_email_dates(app, message)
+            message.result_json, message.state = json.dumps(result), "filtered"
+            job.filtered_into_message_id, job.filter_reason = (
+                decision.representative_message_id,
+                decision.reason,
+            )
+            job.state, job.error, job.retry_at = "done", "", ""
+            if review is not None and review.state == "pending":
+                review.state = "ignored"
+            return True
 
     def require_review(self, job_id, result, reason, extraction=None):
         result = {"probability": 0.5, "confidence": 0, "kind": "other"} | result
@@ -424,6 +553,59 @@ class Importer:
                     )
                 )
             job.state, job.error, job.retry_at = "review", "", ""
+
+    def reprocess_reviews(self, search_id: int, progress=lambda _text: None) -> dict:
+        """Use saved emails only; no mailbox reads, model calls, or usage charges."""
+        with self.tracker.db.sessions() as session:
+            ids = list(
+                session.scalars(
+                    select(Job.id)
+                    .join(Review, Review.job_id == Job.id)
+                    .join(Message, Message.id == Job.message_id)
+                    .where(
+                        Job.search_id == search_id, Job.state == "review", Review.state == "pending"
+                    )
+                    .order_by(Message.received_at, Job.id)
+                )
+            )
+        applied = filtered = 0
+        while ids and not self.cancelled.is_set():
+            previous_applied, deferred = applied, []
+            for index, job_id in enumerate(ids):
+                if self.cancelled.is_set():
+                    break
+                progress(f"Rechecking saved email {index + 1} of {len(ids)}…")
+                with self.tracker.db.sessions.begin() as session:
+                    job = session.get(Job, job_id)
+                    review = session.scalar(select(Review).where(Review.job_id == job_id))
+                    if job.state != "review" or review.state != "pending":
+                        continue
+                    message = session.get(Message, job.message_id)
+                    result = json.loads(message.result_json or "{}")
+                    if (
+                        reusable_review_result(session, message, result, search_id, review.reason)
+                        is None
+                    ):
+                        deferred.append(job_id)
+                        continue
+                    job.state, job.attempts, job.retry_at = "pending", 0, ""
+                self.process(job_id, None)
+                with self.tracker.db.sessions() as session:
+                    completed = session.get(Job, job_id)
+                    if completed.state == "done":
+                        applied += 1
+                        filtered += completed.filtered_into_message_id is not None
+                    else:
+                        deferred.append(job_id)
+            if applied == previous_applied:
+                break
+            # A later email may establish a thread identity for an earlier incomplete
+            # confirmation. Revisit only deferred reviews until no more can be applied.
+            ids = deferred
+        counts = {"applied": applied - filtered, "remaining": len(self.tracker.reviews(search_id))}
+        if filtered:
+            counts["filtered"] = filtered
+        return counts
 
     def run(self, scan_id: int, plan: dict | None = None, progress=lambda _text: None):
         with self.tracker.db.sessions.begin() as session:
@@ -518,6 +700,9 @@ class Importer:
                         )
                     if blocks_scan(error):
                         break
+            # A notice may arrive before the confirmation that establishes its identity.
+            if not self.cancelled.is_set():
+                self.reprocess_reviews(scan.search_id, progress)
             with self.tracker.db.sessions.begin() as session:
                 pending = session.scalar(
                     select(Job.id).where(
@@ -564,6 +749,11 @@ class Importer:
                     record(row)
                     | {
                         "processed": counts.get("done", 0),
+                        "filtered": session.scalar(
+                            select(func.count(Job.id)).where(
+                                Job.scan_id == row.id, Job.filtered_into_message_id.is_not(None)
+                            )
+                        ),
                         "review_count": counts.get("review", 0),
                         "failed": counts.get("error", 0),
                         "pending": counts.get("pending", 0),

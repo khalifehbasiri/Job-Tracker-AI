@@ -33,6 +33,8 @@ class Application(Base):
     role: Mapped[str] = mapped_column(String(300))
     requisition_id: Mapped[str] = mapped_column(default="", index=True)
     applied_on: Mapped[str] = mapped_column(default="")
+    first_email_at: Mapped[str] = mapped_column(default="")
+    last_email_at: Mapped[str] = mapped_column(default="")
     stage: Mapped[str] = mapped_column(default="Applied")
     outcome: Mapped[str] = mapped_column(default="Active")
     notes: Mapped[str] = mapped_column(default="")
@@ -115,6 +117,10 @@ class Job(Base):
     attempts: Mapped[int] = mapped_column(default=0)
     retry_at: Mapped[str] = mapped_column(default="")
     error: Mapped[str] = mapped_column(default="")
+    filtered_into_message_id: Mapped[int | None] = mapped_column(
+        ForeignKey("email_messages.id"), index=True
+    )
+    filter_reason: Mapped[str] = mapped_column(default="")
 
 
 class Review(Base):

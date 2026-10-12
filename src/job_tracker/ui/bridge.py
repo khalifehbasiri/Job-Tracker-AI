@@ -488,6 +488,19 @@ class Bridge(QObject):
         self.local(lambda: self.tracker.resolve_review(review_id, application_id, ignore))
 
     @Slot()
+    def reprocessReviews(self):
+        search_id = self._search_id
+        self.background(
+            lambda: self.importer.reprocess_reviews(search_id, self._work.report_progress),
+            lambda result: self.feedback(
+                f"Automatically applied {result['applied']} saved emails; "
+                f"filtered {result.get('filtered', 0)} redundant emails; "
+                f"{result['remaining']} still need review. No API calls were used."
+            ),
+            operation="review",
+        )
+
+    @Slot()
     def exportExcel(self):
         path, _ = QFileDialog.getSaveFileName(
             None, "Export this search", "Job search.xlsx", "Excel workbooks (*.xlsx)"
