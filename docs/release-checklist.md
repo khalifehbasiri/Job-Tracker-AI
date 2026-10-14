@@ -5,6 +5,16 @@ is outside its scope. A release must ship reviewable changes, passing tests,
 matching library sources/notices, verified assets, and clear setup/limits. Renaming
 a preview does not establish production reliability or measured AI accuracy.
 
+## v0.2.4 refreshed desktop design
+
+- [x] Consistent native desktop styling across all five screens, light/dark themes, readable application rows, and prominent primary actions.
+- [x] Compact settings controls wrap; dropdown selection works from the keyboard; chevrons/help indicators avoid missing font symbols.
+- [x] All 224 source tests and lint/format checks pass locally. Screenshots use fictional records; no live mailbox or paid AI requests used.
+- [ ] Windows/Linux CI and clean Windows release build, frozen launch/privacy checks, and v0.2.3 → v0.2.4 installer upgrade/shortcut/uninstall checks.
+- [ ] Downloaded assets match SHA256SUMS.txt; packaged version/QML and offline guide verified before publication as latest.
+
+Real-account/model availability and billing validation limits below remain applicable.
+
 ## v0.2.3 temporary AI error recovery
 
 - [x] Explicit bounded retries distinguish temporary API failures/rate limits from invalid keys, quota failures, ambiguous 429s, and invalid AI results.

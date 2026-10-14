@@ -1,4 +1,27 @@
-# Job Tracker AI v0.2.3 — automatic AI recovery
+# Job Tracker AI v0.2.4 — refreshed desktop design
+
+## Changed in v0.2.4
+
+The desktop workspace has a consistent green visual identity across all five
+screens, with clearer headings, more prominent primary actions, and refined
+light and dark themes. Application rows now separate the company, role, stage,
+outcome, and applied date so records are easier to scan. The sidebar shows the
+number of emails awaiting review.
+
+Settings controls wrap at smaller window sizes. Dropdowns, inputs, buttons,
+keyboard focus, help indicators, and expand/collapse controls share consistent
+styling; drawn chevrons and help controls avoid missing font symbols.
+
+This download also includes the tracking improvements merged since v0.2.3:
+company/role matching, local review recovery, chronological email updates, and
+redundant-email filtering with preserved audit history. See the README and
+email decision logic documentation for the exact matching and date rules.
+
+All 224 automated source tests pass locally, including desktop navigation at
+1080 × 720 and 1600 × 1000 in both themes and keyboard dropdown selection.
+README screenshots use fictional records. No real mailbox or paid AI requests
+were used for this validation. Existing records and credentials are preserved
+when upgrading; credential setup requirements remain the same.
 
 ## Changed in v0.2.3
 

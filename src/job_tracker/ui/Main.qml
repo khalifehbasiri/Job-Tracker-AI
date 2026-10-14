@@ -17,7 +17,7 @@ ApplicationWindow {
     palette.button: Theme.button
     palette.buttonText: Theme.text
     palette.highlight: Theme.accent
-    palette.highlightedText: Theme.dark ? "#12201d" : "white"
+    palette.highlightedText: Theme.accentText
     palette.mid: Theme.border
     palette.dark: Theme.muted
     palette.light: Theme.surface
@@ -71,55 +71,83 @@ ApplicationWindow {
         anchors.fill: parent
         spacing: 0
         Rectangle {
-            Layout.preferredWidth: 224; Layout.minimumWidth: 224; Layout.maximumWidth: 224; Layout.fillHeight: true
-            color: "#163e36"
+            Layout.preferredWidth: 216; Layout.minimumWidth: 216; Layout.maximumWidth: 216; Layout.fillHeight: true
+            color: Theme.sidebar
             ColumnLayout {
-                anchors.fill: parent; anchors.margins: 22; spacing: 12
-                Image { source: "../assets/logo.png"; Layout.preferredWidth: 54; Layout.preferredHeight: 54; fillMode: Image.PreserveAspectFit; Layout.topMargin: 8 }
-                PlainLabel { text: "JOB TRACKER"; color: "#ffffff"; font.bold: true; font.pixelSize: 19 }
-                PlainLabel { text: "A little clarity for your next move."; color: "#aac0b7"; font.pixelSize: 11; Layout.bottomMargin: 28 }
+                anchors.fill: parent; anchors.margins: 18; spacing: 8
+                RowLayout {
+                    Layout.topMargin: 12; Layout.bottomMargin: 8; spacing: 10
+                    Image { source: "../assets/logo.png"; Layout.preferredWidth: 38; Layout.preferredHeight: 38; fillMode: Image.PreserveAspectFit }
+                    PlainLabel { text: "Job Tracker AI"; font.weight: Font.DemiBold; font.pixelSize: 18 }
+                }
+                PlainLabel { text: "A place for your next move."; color: Theme.muted; font.pixelSize: 12; Layout.leftMargin: 4; Layout.bottomMargin: 30 }
                 Repeater {
                     model: ["Overview", "Applications", "Review inbox", "Email history", "Settings"]
                     delegate: ActionButton {
                         required property string modelData
                         required property int index
                         objectName: "navigation-" + index
+                        id: navigationButton
                         text: modelData; Layout.fillWidth: true; implicitHeight: 46
                         onClicked: root.page = index
-                        background: Rectangle { color: root.page === index ? "#2c5a4e" : "transparent"; radius: 9 }
-                        contentItem: PlainLabel { text: parent.text; color: root.page === index ? "white" : "#bed1c7"; verticalAlignment: Text.AlignVCenter; leftPadding: 12 }
+                        Accessible.description: root.page === index ? "Current page" : "Open " + modelData
+                        background: Rectangle {
+                            color: root.page === index ? Theme.selected : (navigationButton.hovered ? Theme.hover : "transparent")
+                            radius: 6
+                            border.width: navigationButton.visualFocus ? 2 : 0
+                            border.color: Theme.accent
+                        }
+                        contentItem: RowLayout {
+                            PlainLabel {
+                                text: navigationButton.text
+                                color: root.page === index ? Theme.selectedText : Theme.text
+                                font.pixelSize: 14
+                                font.weight: root.page === index ? Font.DemiBold : Font.Normal
+                                Layout.fillWidth: true
+                            }
+                            PlainLabel {
+                                visible: index === 2 && backend.reviews.length > 0
+                                text: backend.reviews.length
+                                color: root.page === index ? Theme.selectedText : Theme.accent
+                                font.pixelSize: 12; font.weight: Font.DemiBold
+                            }
+                        }
                     }
                 }
                 Item { Layout.fillHeight: true }
                 ActionButton {
                     objectName: "openHelpButton"
-                    text: "Help & setup guide · F1"; Layout.fillWidth: true
+                    text: "Help & setup guide"; Layout.fillWidth: true; flat: true
                     onClicked: backend.openSetupGuide()
                     ToolTip.visible: hovered
                     ToolTip.text: "Open the complete offline guide in your browser."
-                    background: Rectangle { color: parent.hovered ? "#2c5a4e" : "transparent"; radius: 9 }
-                    contentItem: PlainLabel { text: parent.text; color: "#d5e4db"; verticalAlignment: Text.AlignVCenter; leftPadding: 12 }
                 }
-                PlainLabel { text: "LOCAL FIRST"; color: "#aec9ba"; font.pixelSize: 10; font.letterSpacing: 2 }
-                PlainLabel { text: "Your searches. Your records.\nYour API key."; color: "#d5e4db"; lineHeight: 1.4; font.pixelSize: 12 }
-                Rectangle { Layout.fillWidth: true; height: 1; color: "#365d4e"; Layout.topMargin: 15 }
-                PlainLabel { text: "v" + backend.appVersion + "  ·  Open source"; color: "#91b29f"; font.pixelSize: 11 }
+                ColumnLayout {
+                    Layout.fillWidth: true; Layout.margins: 12; spacing: 6
+                    PlainLabel { text: "Private by design"; font.weight: Font.DemiBold; font.pixelSize: 12 }
+                    PlainLabel { text: "Stored on this computer.\nAI when you choose."; color: Theme.muted; lineHeight: 1.4; font.pixelSize: 12 }
+                    PlainLabel { text: "v" + backend.appVersion + " · Open source"; color: Theme.muted; font.pixelSize: 11; Layout.topMargin: 12 }
+                }
             }
         }
         ColumnLayout {
             Layout.fillWidth: true; Layout.fillHeight: true
-            Layout.margins: 30; spacing: 20
+            Layout.margins: root.width < 1200 ? 24 : 32; spacing: 20
             RowLayout {
                 Layout.fillWidth: true
                 ColumnLayout {
-                    spacing: 6
-                    PlainLabel { text: "YOUR NEXT CHAPTER"; color: Theme.muted; font.pixelSize: 10; font.letterSpacing: 2 }
-                    PlainLabel { text: ["Search overview", "Your applications", "Review inbox", "Import email history", "Make it yours"][root.page]; font.pixelSize: 30; font.weight: Font.DemiBold; color: Theme.text }
+                    Layout.fillWidth: true; spacing: 6
+                    PlainLabel { text: ["Overview", "Applications", "Review inbox", "Email history", "Settings"][root.page]; font.pixelSize: 32; font.weight: Font.DemiBold; font.letterSpacing: -0.8; color: Theme.text }
+                    PlainLabel {
+                        text: ["A little clarity for your next move.", "Every opportunity, in one place.", "A second look before your records change.", "Bring your past applications into view.", "Your workspace, your preferences."][root.page]
+                        color: Theme.muted; font.pixelSize: 13
+                        Layout.fillWidth: true; elide: Text.ElideRight
+                    }
                 }
-                Item { Layout.fillWidth: true }
-                ComboBox {
+                Select {
                     id: searchSelector
-                    Layout.preferredWidth: 230
+                    Layout.preferredWidth: root.width < 1200 ? 205 : 245
+                    Accessible.name: "Current job search"
                     model: backend.searches; textRole: "name"; valueRole: "id"
                     enabled: !backend.busy
                     currentIndex: backend.searches.findIndex(function(s) { return s.id === backend.selectedSearch })
@@ -130,7 +158,7 @@ ApplicationWindow {
             Rectangle {
                 objectName: "statusBanner"
                 Layout.fillWidth: true; implicitHeight: statusRow.implicitHeight + 24
-                color: Theme.subtle; radius: 10
+                color: Theme.subtle; radius: 6
                 RowLayout {
                     id: statusRow
                     anchors.fill: parent; anchors.margins: 12
@@ -151,33 +179,34 @@ ApplicationWindow {
                         width: overviewScroll.availableWidth; spacing: 20
                         RowLayout {
                             Layout.fillWidth: true
-                            PlainLabel { text: root.search.name + (root.search.archived ? " · archived" : ""); color: Theme.text; font.pixelSize: 17 }
+                            PlainLabel { text: "Your search at a glance" + (root.search.archived ? " · archived" : ""); font.weight: Font.DemiBold; font.pixelSize: 16 }
                             Item { Layout.fillWidth: true }
-                            ActionButton { text: "+ Add application"; enabled: !backend.busy; onClicked: root.openApplication(null) }
+                            ActionButton { text: "+ Add application"; primary: true; enabled: !backend.busy; onClicked: root.openApplication(null) }
                         }
                         RowLayout {
                             Layout.fillWidth: true; spacing: 14; uniformCellSizes: true
-                            Stat { label: "APPLICATIONS"; value: backend.applications.length.toString(); Layout.fillWidth: true }
-                            Stat { label: "ACTIVE"; value: backend.applications.filter(function(a) { return a.outcome === "Active" }).length.toString(); Layout.fillWidth: true }
-                            Stat { label: "INTERVIEWS"; value: root.countStage("Interview").toString(); Layout.fillWidth: true; accent: Theme.warning }
-                            Stat { label: "NEEDS REVIEW"; value: backend.reviews.length.toString(); Layout.fillWidth: true; accent: Theme.warning }
+                            Stat { label: "Total applications"; value: backend.applications.length.toString(); Layout.fillWidth: true; highlighted: true }
+                            Stat { label: "Active opportunities"; value: backend.applications.filter(function(a) { return a.outcome === "Active" }).length.toString(); Layout.fillWidth: true }
+                            Stat { label: "At interview"; value: root.countStage("Interview").toString(); Layout.fillWidth: true }
+                            Stat { label: "Emails to review"; value: backend.reviews.length.toString(); Layout.fillWidth: true; accent: backend.reviews.length > 0 ? Theme.warning : Theme.text }
                         }
                         RowLayout {
                             Layout.fillWidth: true; spacing: 20; uniformCellSizes: true
                             Card {
-                                Layout.fillWidth: true; Layout.preferredHeight: 245
+                                Layout.fillWidth: true; Layout.preferredHeight: 240
                                 ColumnLayout {
-                                    anchors.fill: parent; spacing: 16
-                                    PlainLabel { text: "Where things stand"; font.bold: true; font.pixelSize: 17; color: Theme.text }
+                                    anchors.fill: parent; spacing: 15
+                                    PlainLabel { text: "Application pipeline"; font.weight: Font.DemiBold; font.pixelSize: 17 }
+                                    PlainLabel { text: "Active applications by stage"; color: Theme.muted; font.pixelSize: 12; Layout.bottomMargin: 4 }
                                     Repeater {
                                         model: ["Applied", "Assessment", "Interview", "Offer"]
                                         delegate: RowLayout {
                                             required property string modelData
                                             Layout.fillWidth: true
-                                            PlainLabel { text: modelData; Layout.preferredWidth: 100; color: Theme.muted }
+                                            PlainLabel { text: modelData; Layout.preferredWidth: 94; font.pixelSize: 13 }
                                             Rectangle {
-                                                Layout.fillWidth: true; height: 9; radius: 4; color: Theme.subtle
-                                                Rectangle { width: parent.width * root.countStage(modelData) / Math.max(1, backend.applications.length); height: parent.height; radius: 4; color: Theme.accent }
+                                                Layout.fillWidth: true; height: 10; radius: 3; color: Theme.subtle
+                                                Rectangle { width: parent.width * root.countStage(modelData) / Math.max(1, backend.applications.length); height: parent.height; radius: 3; color: Theme.accent }
                                             }
                                             PlainLabel { text: root.countStage(modelData); Layout.preferredWidth: 25; horizontalAlignment: Text.AlignRight; color: Theme.muted }
                                         }
@@ -186,11 +215,18 @@ ApplicationWindow {
                                 }
                             }
                             Card {
-                                Layout.fillWidth: true; Layout.preferredHeight: 245
+                                Layout.fillWidth: true; Layout.preferredHeight: 240
                                 ColumnLayout {
-                                    anchors.fill: parent
-                                    PlainLabel { text: "Coming up"; font.bold: true; font.pixelSize: 17; color: Theme.text }
-                                    PlainLabel { visible: backend.tasks.filter(function(t) { return !t.completed }).length === 0; text: "No upcoming tasks yet.\nEmail invitations and deadlines appear here."; wrapMode: Text.WordWrap; color: Theme.muted; Layout.fillWidth: true; Layout.topMargin: 30 }
+                                    anchors.fill: parent; spacing: 10
+                                    PlainLabel { text: "Coming up"; font.weight: Font.DemiBold; font.pixelSize: 17 }
+                                    ColumnLayout {
+                                        visible: backend.tasks.filter(function(t) { return !t.completed }).length === 0
+                                        Layout.fillWidth: true; Layout.fillHeight: true; spacing: 8
+                                        Item { Layout.fillHeight: true }
+                                        PlainLabel { text: "No upcoming tasks"; font.pixelSize: 18; font.weight: Font.DemiBold }
+                                        PlainLabel { text: "Interview invitations and deadlines\nwill appear here when they're available."; wrapMode: Text.WordWrap; color: Theme.muted; font.pixelSize: 13; lineHeight: 1.3; Layout.fillWidth: true }
+                                        Item { Layout.fillHeight: true }
+                                    }
                                     Repeater {
                                         model: backend.tasks.filter(function(t) { return !t.completed }).slice(0, 3)
                                         delegate: CheckBox {
@@ -200,7 +236,7 @@ ApplicationWindow {
                                             onClicked: backend.completeTask(modelData.id, true)
                                         }
                                     }
-                                    Item { Layout.fillHeight: true }
+                                    Item { visible: backend.tasks.filter(function(t) { return !t.completed }).length > 0; Layout.fillHeight: true }
                                 }
                             }
                         }
@@ -217,10 +253,10 @@ ApplicationWindow {
                                 PlainLabel { visible: backend.applications.length === 0; text: "Start with a manual application, import your Excel tracker, or connect an email account."; wrapMode: Text.WordWrap; color: Theme.muted; Layout.fillWidth: true; Layout.margins: 20 }
                                 Repeater {
                                     model: backend.applications.slice(0, 5)
-                                    delegate: ItemDelegate {
+                                    delegate: ApplicationRow {
                                         required property var modelData
                                         Layout.fillWidth: true
-                                        text: modelData.company + "  /  " + modelData.role + "     ·     " + modelData.stage + " · " + modelData.outcome
+                                        application: modelData
                                         onClicked: root.openApplication(modelData)
                                     }
                                 }
@@ -234,10 +270,10 @@ ApplicationWindow {
                     RowLayout {
                         Layout.fillWidth: true
                         Field { id: filter; placeholderText: "Search company or role…"; Layout.fillWidth: true }
-                        ComboBox { id: stageFilter; model: ["All stages", "Applied", "Assessment", "Interview", "Offer"] }
+                        Select { id: stageFilter; model: ["All stages", "Applied", "Assessment", "Interview", "Offer"] }
                         ActionButton { text: "Import Excel"; enabled: !backend.busy; onClicked: backend.previewExcel() }
                         ActionButton { text: "Export Excel"; enabled: !backend.busy; onClicked: backend.exportExcel() }
-                        ActionButton { text: "+ Add"; enabled: !backend.busy; onClicked: root.openApplication(null) }
+                        ActionButton { text: "+ Add application"; primary: true; enabled: !backend.busy; onClicked: root.openApplication(null) }
                     }
                     Card {
                         Layout.fillWidth: true; Layout.fillHeight: true
@@ -245,30 +281,22 @@ ApplicationWindow {
                             anchors.fill: parent
                             RowLayout {
                                 Layout.fillWidth: true
-                                PlainLabel { text: "COMPANY / ROLE"; Layout.fillWidth: true; color: Theme.muted; font.pixelSize: 11 }
-                                PlainLabel { text: "STAGE"; Layout.preferredWidth: 110; color: Theme.muted; font.pixelSize: 11 }
-                                PlainLabel { text: "OUTCOME"; Layout.preferredWidth: 110; color: Theme.muted; font.pixelSize: 11 }
-                                PlainLabel { text: "APPLIED"; Layout.preferredWidth: 100; color: Theme.muted; font.pixelSize: 11 }
-                                Item { Layout.preferredWidth: 65 }
+                                Layout.leftMargin: 12; Layout.rightMargin: 12; spacing: 14
+                                PlainLabel { text: "Company & role"; Layout.fillWidth: true; color: Theme.muted; font.pixelSize: 12 }
+                                PlainLabel { text: "Stage"; Layout.preferredWidth: 100; color: Theme.muted; font.pixelSize: 12 }
+                                PlainLabel { text: "Outcome"; Layout.preferredWidth: 88; color: Theme.muted; font.pixelSize: 12 }
+                                PlainLabel { text: "Date applied"; Layout.preferredWidth: 90; color: Theme.muted; font.pixelSize: 12 }
+                                Item { Layout.preferredWidth: 18 }
                             }
                             ListView {
                                 Layout.fillWidth: true; Layout.fillHeight: true; clip: true; spacing: 3
                                 model: root.filteredApps
-                                delegate: ItemDelegate {
+                                ScrollBar.vertical: ScrollBar {}
+                                delegate: ApplicationRow {
                                     required property var modelData
-                                    width: ListView.view.width; height: 76
+                                    width: ListView.view.width
+                                    application: modelData
                                     onClicked: root.openApplication(modelData)
-                                    contentItem: RowLayout {
-                                        ColumnLayout {
-                                            Layout.fillWidth: true; spacing: 3
-                                            PlainLabel { text: modelData.company; font.bold: true; color: Theme.text; Layout.fillWidth: true; elide: Text.ElideRight }
-                                            PlainLabel { text: modelData.role; color: Theme.muted; font.pixelSize: 12; Layout.fillWidth: true; elide: Text.ElideRight }
-                                        }
-                                        PlainLabel { text: modelData.stage; Layout.preferredWidth: 110; color: Theme.accent }
-                                        PlainLabel { text: modelData.outcome; Layout.preferredWidth: 110; color: modelData.outcome === "Rejected" ? Theme.danger : Theme.muted }
-                                        PlainLabel { text: modelData.applied_on || "Unknown"; Layout.preferredWidth: 100; color: Theme.muted; font.pixelSize: 12 }
-                                        PlainLabel { text: "Open →"; Layout.preferredWidth: 65; color: Theme.muted }
-                                    }
                                 }
                                 PlainLabel { anchors.centerIn: parent; visible: root.filteredApps.length === 0; text: "No applications to show."; color: Theme.muted }
                             }
@@ -317,7 +345,7 @@ ApplicationWindow {
                                                 PlainLabel { text: modelData.subject; font.bold: true; Layout.fillWidth: true; wrapMode: Text.WordWrap }
                                                 PlainLabel { text: modelData.sender + " · " + modelData.received_at.slice(0, 10) + " · " + reviewCard.proposal.kind; color: Theme.muted; Layout.fillWidth: true; elide: Text.ElideRight }
                                             }
-                                            PlainLabel { text: reviewCard.expanded ? "⌃" : "⌄"; font.pixelSize: 22; color: Theme.accent }
+                                            Chevron { expanded: reviewCard.expanded; Layout.alignment: Qt.AlignVCenter }
                                         }
                                     }
                                     PlainLabel { text: modelData.reason; color: Theme.warning; wrapMode: Text.WordWrap; Layout.fillWidth: true }
@@ -325,7 +353,7 @@ ApplicationWindow {
                                     PlainLabel { objectName: "reviewBody-" + modelData.id; visible: reviewCard.expanded; text: reviewCard.expanded ? modelData.body : ""; Layout.fillWidth: true; wrapMode: Text.WordWrap; textFormat: Text.PlainText; color: Theme.muted }
                                     RowLayout {
                                         visible: reviewCard.expanded
-                                        ComboBox { id: reviewApp; Layout.fillWidth: true; model: reviewCard.expanded ? backend.applications.map(function(a) { return {id: a.id, name: a.company + " / " + a.role} }) : []; textRole: "name"; valueRole: "id" }
+                                        Select { id: reviewApp; Layout.fillWidth: true; model: reviewCard.expanded ? backend.applications.map(function(a) { return {id: a.id, name: a.company + " / " + a.role} }) : []; textRole: "name"; valueRole: "id" }
                                         ActionButton { text: "Link application"; enabled: !backend.busy && reviewApp.currentIndex >= 0; onClicked: backend.resolveReview(modelData.id, reviewApp.currentValue, false) }
                                         ActionButton { text: "Create application"; visible: !!JSON.parse(modelData.proposed_json).extraction.company && !!JSON.parse(modelData.proposed_json).extraction.role; enabled: !backend.busy; onClicked: backend.resolveReview(modelData.id, 0, false) }
                                         ActionButton { text: "Add manually"; visible: !JSON.parse(modelData.proposed_json).extraction.company || !JSON.parse(modelData.proposed_json).extraction.role; enabled: !backend.busy; onClicked: root.openApplication(null) }
@@ -349,15 +377,15 @@ ApplicationWindow {
                                 PlainLabel { text: "Reconstruct a past job search"; font.bold: true; font.pixelSize: 20; color: Theme.text }
                                 RowLayout {
                                     PlainLabel { text: "Email source"; color: Theme.muted }
-                                    ComboBox { objectName: "historyProviderSelector"; model: ["Gmail", "Outlook", "All mailboxes"]; currentIndex: ["gmail", "outlook", "all"].indexOf(backend.selectedProvider); enabled: !backend.busy; onActivated: backend.selectProvider(["gmail", "outlook", "all"][currentIndex]) }
+                                    Select { objectName: "historyProviderSelector"; model: ["Gmail", "Outlook", "All mailboxes"]; currentIndex: ["gmail", "outlook", "all"].indexOf(backend.selectedProvider); enabled: !backend.busy; onActivated: backend.selectProvider(["gmail", "outlook", "all"][currentIndex]) }
                                 }
                                 PlainLabel { text: "Scan the selected email source from oldest to newest. This choice also controls automatic processing.\nExisting scans resume their original mailboxes. Preview first, then set your spending limit. Email dates use UTC."; color: Theme.muted; wrapMode: Text.WordWrap; Layout.fillWidth: true }
                                 RowLayout {
-                                    ComboBox { model: ["Last month", "Last 3 months", "Last 6 months", "Last year", "Custom"]; onActivated: { if (currentIndex < 4) scanStart.text = backend.historyStart([1, 3, 6, 12][currentIndex]) } }
+                                    Select { model: ["Last month", "Last 3 months", "Last 6 months", "Last year", "Custom"]; onActivated: { if (currentIndex < 4) scanStart.text = backend.historyStart([1, 3, 6, 12][currentIndex]) } }
                                     Field { id: scanStart; text: backend.historyStart(1); placeholderText: "Start YYYY-MM-DD" }
                                     PlainLabel { text: "to"; color: Theme.muted }
                                     Field { id: scanEnd; text: Qt.formatDate(new Date(), "yyyy-MM-dd"); placeholderText: "End YYYY-MM-DD" }
-                                    ActionButton { text: "Preview scan →"; enabled: !backend.busy; onClicked: backend.previewHistory(scanStart.text, scanEnd.text) }
+                                    ActionButton { text: "Preview scan →"; primary: true; enabled: !backend.busy; onClicked: backend.previewHistory(scanStart.text, scanEnd.text) }
                                 }
                             }
                         }
@@ -428,7 +456,7 @@ ApplicationWindow {
                                 PlainLabel { text: backend.apiReady ? "● API key configured" : "○ Manual mode — add a key to enable AI"; color: Theme.accent }
                                 PlainLabel { text: "Supply your own OpenAI API key. API billing is separate from ChatGPT.\nAI sends selected email text to OpenAI using your account. Models: GPT-6 Luna (Decisions, provider public beta) + GPT-5.4 mini (extraction)."; wrapMode: Text.WordWrap; color: Theme.muted; Layout.fillWidth: true }
                                 RowLayout {
-                                    ActionButton { text: "Create an OpenAI key ↗"; onClicked: Qt.openUrlExternally("https://platform.openai.com/api-keys") }
+                                    ActionButton { text: "Create an OpenAI key"; onClicked: Qt.openUrlExternally("https://platform.openai.com/api-keys") }
                                     ActionButton { text: "Step-by-step setup"; onClicked: backend.openSetupGuide() }
                                     ActionButton { text: "Setup wizard"; enabled: !backend.busy; onClicked: { setupWizard.step = 0; setupWizard.open() } }
                                 }
@@ -441,15 +469,21 @@ ApplicationWindow {
                                     ActionButton { text: "Check key"; enabled: !backend.busy && backend.apiReady; onClicked: backend.testKey() }
                                     ActionButton { text: "Remove"; enabled: !backend.busy && backend.apiReady; onClicked: backend.removeKey() }
                                 }
-                                RowLayout {
+                                GridLayout {
+                                    Layout.fillWidth: true
+                                    columns: root.width < 1200 ? 1 : 2
+                                    rowSpacing: 12; columnSpacing: 12
                                     CheckBox { id: autoSync; text: "Automatically process new emails every 5 minutes"; checked: backend.aiEnabled }
-                                    Item { Layout.fillWidth: true }
-                                    PlainLabel { text: "Per sync $"; color: Theme.muted }
-                                    Field { id: syncBudget; text: backend.syncBudget; Layout.preferredWidth: 65 }
-                                    PlainLabel { text: "Daily $"; color: Theme.muted }
-                                    Field { id: dailyBudget; text: backend.dailyBudget; Layout.preferredWidth: 65 }
-                                    HelpTip { explanation: "Limits are estimated USD usage plus reservations for in-flight or failed requests. Check OpenAI billing for actual charges. Automatic processing must be enabled explicitly." }
-                                    ActionButton { text: "Apply"; enabled: !backend.busy; onClicked: backend.configureAI(autoSync.checked, syncBudget.text, dailyBudget.text) }
+                                    RowLayout {
+                                        Layout.fillWidth: true
+                                        Item { Layout.fillWidth: true }
+                                        PlainLabel { text: "Per sync $"; color: Theme.muted }
+                                        Field { id: syncBudget; text: backend.syncBudget; Layout.preferredWidth: 65 }
+                                        PlainLabel { text: "Daily $"; color: Theme.muted }
+                                        Field { id: dailyBudget; text: backend.dailyBudget; Layout.preferredWidth: 65 }
+                                        HelpTip { explanation: "Limits are estimated USD usage plus reservations for in-flight or failed requests. Check OpenAI billing for actual charges. Automatic processing must be enabled explicitly." }
+                                        ActionButton { text: "Apply"; enabled: !backend.busy; onClicked: backend.configureAI(autoSync.checked, syncBudget.text, dailyBudget.text) }
+                                    }
                                 }
                             }
                         }
@@ -462,12 +496,13 @@ ApplicationWindow {
                                     HelpTip { explanation: "This release uses your own Google or Microsoft OAuth registration. Click for the setup summary."; onClicked: authHelp.open() }
                                 }
                                 PlainLabel { text: "Use your own Google Desktop OAuth JSON or Microsoft application client ID. Shared one-click OAuth onboarding is not included.\nConnect in your browser after configuring your registration. Access is read-only."; wrapMode: Text.WordWrap; color: Theme.muted; Layout.fillWidth: true }
-                                RowLayout {
-                                    ComboBox { objectName: "settingsProviderSelector"; model: ["Gmail", "Outlook", "All mailboxes"]; currentIndex: ["gmail", "outlook", "all"].indexOf(backend.selectedProvider); enabled: !backend.busy; onActivated: backend.selectProvider(["gmail", "outlook", "all"][currentIndex]) }
+                                Flow {
+                                    Layout.fillWidth: true
+                                    spacing: 8
+                                    Select { objectName: "settingsProviderSelector"; model: ["Gmail", "Outlook", "All mailboxes"]; currentIndex: ["gmail", "outlook", "all"].indexOf(backend.selectedProvider); enabled: !backend.busy; onActivated: backend.selectProvider(["gmail", "outlook", "all"][currentIndex]) }
                                     ActionButton { visible: backend.selectedProvider !== "outlook"; text: backend.connectingProvider === "gmail" ? "Signing in to Gmail…" : "Connect Gmail"; enabled: !backend.busy && backend.googleConfigured; onClicked: { mailboxConsent.provider = "gmail"; mailboxConsent.open() } }
                                     ActionButton { visible: backend.selectedProvider !== "gmail"; text: backend.connectingProvider === "outlook" ? "Signing in to Outlook…" : "Connect Outlook"; enabled: !backend.busy && backend.microsoftClient.length > 0; onClicked: { mailboxConsent.provider = "outlook"; mailboxConsent.open() } }
                                     CheckBox { id: mailSession; text: "Session only" }
-                                    Item { Layout.fillWidth: true }
                                     ActionButton { text: "Configure your OAuth app"; enabled: !backend.busy; onClicked: advancedOAuth.open() }
                                 }
                                 PlainLabel { visible: backend.selectedProvider !== "outlook"; text: backend.mailboxStatuses.gmail; wrapMode: Text.WordWrap; Layout.fillWidth: true; color: Theme.muted }
@@ -506,7 +541,7 @@ ApplicationWindow {
                                 anchors.fill: parent; spacing: 12
                                 PlainLabel { text: "About Job Tracker AI · v" + backend.appVersion; font.bold: true; font.pixelSize: 20; color: Theme.text }
                                 PlainLabel { text: "MIT-licensed application with dynamically linked Qt/PySide6 under LGPL-3.0. License texts and dependency notices are included with the app; matching library sources are available with each release."; wrapMode: Text.WordWrap; color: Theme.muted; Layout.fillWidth: true }
-                                ActionButton { text: "Licenses & library sources ↗"; onClicked: Qt.openUrlExternally(backend.licenseUrl) }
+                                ActionButton { text: "Licenses & library sources"; onClicked: Qt.openUrlExternally(backend.licenseUrl) }
                             }
                         }
                     }
@@ -526,7 +561,7 @@ ApplicationWindow {
             PlainLabel { text: "3. Outlook: register an app in Microsoft Entra supporting organizational and personal accounts. Add Mobile and desktop → http://localhost, plus delegated Graph Mail.Read and User.Read permissions. Paste the Application (client) ID in Configure your OAuth app, save it, then Connect Outlook. No client secret is needed."; wrapMode: Text.WordWrap; Layout.fillWidth: true }
             PlainLabel { text: "4. Pick Gmail, Outlook, or all mailboxes. In Email history, preview a date range and set a USD limit before starting. Connecting alone does not start a scan. Session-only credentials disappear when you quit."; wrapMode: Text.WordWrap; Layout.fillWidth: true }
             ActionButton { text: "Open full offline setup guide"; onClicked: backend.openSetupGuide() }
-            ActionButton { text: "Read the guide on GitHub ↗"; onClicked: Qt.openUrlExternally(backend.setupGuideUrl) }
+            ActionButton { text: "Read the guide on GitHub"; onClicked: Qt.openUrlExternally(backend.setupGuideUrl) }
         }
     }
     Dialog {
@@ -567,7 +602,7 @@ ApplicationWindow {
                 }
                 ColumnLayout {
                     PlainLabel { text: "Create your own OAuth registration using the setup guide. Import Google's Desktop JSON, or paste Microsoft's Application (client) ID. Connecting grants read-only access and does not start a scan."; wrapMode: Text.WordWrap; Layout.fillWidth: true }
-                    ComboBox { model: ["Gmail", "Outlook"]; currentIndex: backend.selectedProvider === "outlook" ? 1 : 0; enabled: !backend.busy; onActivated: backend.selectProvider(currentIndex === 0 ? "gmail" : "outlook") }
+                    Select { model: ["Gmail", "Outlook"]; currentIndex: backend.selectedProvider === "outlook" ? 1 : 0; enabled: !backend.busy; onActivated: backend.selectProvider(currentIndex === 0 ? "gmail" : "outlook") }
                     CheckBox { id: wizardMailSession; text: "Store email credentials for this session only"; onToggled: mailSession.checked = checked }
                     ActionButton { visible: backend.selectedProvider !== "outlook"; text: "Import Google Desktop JSON…"; enabled: !backend.busy; onClicked: backend.chooseGmailClient(!wizardMailSession.checked) }
                     Field { id: wizardMicrosoft; visible: backend.selectedProvider === "outlook"; text: backend.microsoftClient; placeholderText: "Application (client) ID"; Layout.fillWidth: true }
@@ -577,7 +612,7 @@ ApplicationWindow {
                 }
                 ColumnLayout {
                     PlainLabel { text: "Create a project API key in OpenAI Platform and configure API billing. ChatGPT subscriptions do not include API credits. Model/Decisions availability depends on your project."; wrapMode: Text.WordWrap; Layout.fillWidth: true }
-                    ActionButton { text: "Create an OpenAI key ↗"; onClicked: Qt.openUrlExternally("https://platform.openai.com/api-keys") }
+                    ActionButton { text: "Create an OpenAI key"; onClicked: Qt.openUrlExternally("https://platform.openai.com/api-keys") }
                     Field { id: wizardKey; placeholderText: "Paste your OpenAI API key"; echoMode: TextInput.Password; Layout.fillWidth: true }
                     CheckBox { id: wizardKeySession; text: "Store API key for this session only" }
                     RowLayout {
@@ -678,8 +713,8 @@ ApplicationWindow {
                     HelpTip { explanation: "Only application confirmations fill a blank applied date: explicit date first, otherwise the email's UTC received date. Rejection/interview emails leave it unknown. You can enter the actual submission date here." }
                 }
                 RowLayout {
-                    ComboBox { id: stage; model: ["Applied", "Assessment", "Interview", "Offer"]; Layout.fillWidth: true }
-                    ComboBox { id: outcome; model: ["Active", "Rejected", "Withdrawn", "Accepted", "Closed"]; Layout.fillWidth: true }
+                    Select { id: stage; model: ["Applied", "Assessment", "Interview", "Offer"]; Layout.fillWidth: true }
+                    Select { id: outcome; model: ["Active", "Rejected", "Withdrawn", "Accepted", "Closed"]; Layout.fillWidth: true }
                     HelpTip { explanation: "Stage tracks progress (Applied → Offer). Outcome tracks whether the application is active or ended. For example, an interview rejection keeps stage Interview and sets outcome Rejected." }
                 }
                 PlainLabel {
@@ -691,10 +726,10 @@ ApplicationWindow {
                 PlainLabel { text: "Changing the status manually protects it from automatic email updates."; color: Theme.muted; wrapMode: Text.WordWrap; Layout.fillWidth: true; font.pixelSize: 12 }
                 RowLayout {
                     visible: !!root.selectedApp.id
-                    ComboBox { id: moveSearch; model: backend.searches; textRole: "name"; valueRole: "id"; Layout.fillWidth: true }
+                    Select { id: moveSearch; model: backend.searches; textRole: "name"; valueRole: "id"; Layout.fillWidth: true }
                     ActionButton { text: "Move to search"; enabled: !backend.busy; onClicked: { backend.moveApplication(root.selectedApp.id, moveSearch.currentValue); applicationDialog.close() } }
                 }
-                PlainLabel { text: "EVENT TIMELINE"; visible: !!root.selectedApp.id; color: Theme.muted; font.pixelSize: 11; Layout.topMargin: 12 }
+                PlainLabel { text: "Event timeline"; visible: !!root.selectedApp.id; color: Theme.muted; font.pixelSize: 11; Layout.topMargin: 12 }
                 Repeater {
                     model: root.selectedApp.id ? backend.events : []
                     delegate: Frame {
@@ -730,7 +765,7 @@ ApplicationWindow {
                     property int columnIndex: column.currentIndex - 1
                     Layout.fillWidth: true
                     PlainLabel { text: modelData.label; Layout.preferredWidth: 160 }
-                    ComboBox { id: column; model: ["Not mapped"].concat(backend.importPreview.headers); Layout.fillWidth: true }
+                    Select { id: column; model: ["Not mapped"].concat(backend.importPreview.headers); Layout.fillWidth: true }
                 }
             }
             PlainLabel { text: "Preview: " + JSON.stringify(backend.importPreview.samples); Layout.fillWidth: true; wrapMode: Text.WordWrap; textFormat: Text.PlainText; color: Theme.muted }

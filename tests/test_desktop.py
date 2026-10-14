@@ -2,10 +2,11 @@ import json
 from pathlib import Path
 
 import pytest
-from PySide6.QtCore import QMetaObject, QObject, QThread, QUrl
-from PySide6.QtQml import QQmlApplicationEngine
+from PySide6.QtCore import QMetaObject, QObject, Qt, QThread, QUrl
+from PySide6.QtQml import QQmlApplicationEngine, QQmlExpression
 from PySide6.QtQuick import QQuickWindow
 from PySide6.QtQuickControls2 import QQuickStyle
+from PySide6.QtTest import QTest
 
 from job_tracker.credentials import Credentials
 from job_tracker.db import Account, Job, Message, Review, Scan
@@ -110,7 +111,14 @@ def test_qml_pages_and_live_records(qapp, qtbot, tracker):
         bridge.setDarkMode(dark)
         qtbot.wait(30)
         assert bridge.darkMode == dark
-        assert window.property("color").name() == ("#12201d" if dark else "#f4f6f1")
+        assert window.property("color").name() == ("#141b18" if dark else "#f2f4f3")
+        for width, height in ((1080, 720), (1600, 1000)):
+            window.resize(width, height)
+            for page in range(5):
+                window.setProperty("page", page)
+                qtbot.wait(20)
+                assert not window.grabWindow().isNull()
+        window.resize(1360, 900)
         for popup in ("authHelp", "editSearchDialog"):
             dialog = window.findChild(QObject, popup)
             dialog.setProperty("visible", True)
@@ -159,6 +167,16 @@ def test_qml_pages_and_live_records(qapp, qtbot, tracker):
     qtbot.wait(40)
     assert window.findChild(QObject, "settingsProviderSelector").property("currentIndex") == 1
     assert window.findChild(QObject, "historyProviderSelector").property("currentIndex") == 1
+    window.setProperty("page", 3)
+    selector = window.findChild(QObject, "historyProviderSelector")
+    QMetaObject.invokeMethod(selector, "forceActiveFocus")
+    expression = QQmlExpression(engine.rootContext(), selector, "popup.open()")
+    expression.evaluate()
+    assert not expression.hasError()
+    QTest.keyClick(window, Qt.Key_Down)
+    QTest.keyClick(window, Qt.Key_Return)
+    qtbot.wait(40)
+    assert bridge.selectedProvider == "all"
     assert not warnings, "\n".join(warnings)
     window.close()
     engine.deleteLater()

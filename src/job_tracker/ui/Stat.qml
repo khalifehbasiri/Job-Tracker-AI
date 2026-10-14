@@ -6,11 +6,14 @@ import QtQuick.Layouts
 Card {
     property string label
     property string value
-    property string accent: Theme.accent
-    implicitHeight: 125
+    property color accent: Theme.text
+    property bool highlighted: false
+    implicitHeight: 116
+    background: Rectangle { radius: 10; color: highlighted ? Theme.selected : Theme.surface }
     ColumnLayout {
         anchors.fill: parent
-        Label { text: label; color: Theme.muted; font.pixelSize: 13 }
-        Label { text: value; color: accent; font.pixelSize: 36; font.weight: Font.DemiBold }
+        spacing: 8
+        PlainLabel { text: label; color: highlighted ? Theme.selectedText : Theme.muted; font.pixelSize: 13 }
+        PlainLabel { text: value; color: highlighted ? Theme.selectedText : accent; font.pixelSize: 40; font.weight: Font.DemiBold }
     }
 }

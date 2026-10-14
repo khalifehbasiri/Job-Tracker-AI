@@ -3,10 +3,9 @@ import "."
 import QtQuick.Controls
 
 Pane {
-    padding: 22
+    padding: 24
     background: Rectangle {
         color: Theme.surface
-        radius: 16
-        border.color: Theme.border
+        radius: 10
     }
 }
