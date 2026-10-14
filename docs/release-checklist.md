@@ -10,8 +10,10 @@ a preview does not establish production reliability or measured AI accuracy.
 - [x] Consistent native desktop styling across all five screens, light/dark themes, readable application rows, and prominent primary actions.
 - [x] Compact settings controls wrap; dropdown selection works from the keyboard; chevrons/help indicators avoid missing font symbols.
 - [x] All 224 source tests and lint/format checks pass locally. Screenshots use fictional records; no live mailbox or paid AI requests used.
-- [ ] Windows/Linux CI and clean Windows release build, frozen launch/privacy checks, and v0.2.3 → v0.2.4 installer upgrade/shortcut/uninstall checks.
-- [ ] Downloaded assets match SHA256SUMS.txt; packaged version/QML and offline guide verified before publication as latest.
+- [x] Windows/Linux CI and clean Windows release build, frozen launch/privacy checks, and v0.2.3 → v0.2.4 installer upgrade/shortcut/uninstall checks.
+- [x] All four downloaded assets match SHA256SUMS.txt; packaged version/QML, logo, README, and offline guide verified. Downloaded portable app passes privacy checks and renders the light dashboard and dark settings. Published v0.2.4 as latest.
+
+Evidence: [224-test Windows/Linux checks](https://github.com/khalifehbasiri/Job-Tracker-AI/actions/runs/38652091414), [clean Windows build and v0.2.3 upgrade validation](https://github.com/khalifehbasiri/Job-Tracker-AI/actions/runs/38652095647), and [v0.2.4 downloads](https://github.com/khalifehbasiri/Job-Tracker-AI/releases/tag/v0.2.4). The frozen Python package reports 0.2.4, and every bundled QML component matches the release source.
 
 Real-account/model availability and billing validation limits below remain applicable.
 
